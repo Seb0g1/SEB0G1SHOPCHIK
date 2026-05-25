@@ -1,0 +1,41 @@
+{
+  "name": "avito-dropshipping-manager",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "predev": "prisma generate && node scripts/init-db.mjs",
+    "dev": "next dev -p 4317",
+    "build": "prisma generate && next build",
+    "prestart": "node scripts/init-db.mjs",
+    "start": "next start -p 4317",
+    "db:generate": "prisma generate",
+    "db:push": "node scripts/init-db.mjs",
+    "db:init": "node scripts/init-db.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "clsx": "2.1.1",
+    "lucide-react": "1.16.0",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0",
+    "@tailwindcss/forms": "0.5.11",
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "autoprefixer": "10.5.0",
+    "postcss": "8.5.15",
+    "prisma": "^5.22.0",
+    "tailwindcss": "3.4.17",
+    "typescript": "6.0.3",
+    "vitest": "4.1.7"
+  }
+}

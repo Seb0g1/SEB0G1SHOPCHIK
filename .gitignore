@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+dist
+coverage
+.env
+.env*.local
+dev-server.log
+*.tsbuildinfo
+data/uploads
+data/*.sqlite
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+test-results
+playwright-report

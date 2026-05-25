@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ProductTemplate {
+  id                   String           @id @default(cuid())
+  title                String
+  brand                String?
+  category             String           @default("Личные вещи")
+  goodsType            String           @default("Одежда, обувь, аксессуары")
+  productType          String           @default("Футболки и топы")
+  adType               String           @default("Товар приобретен на продажу")
+  gender               String           @default("Мужская")
+  condition            String           @default("Новое")
+  basePrice            Int              @default(0)
+  description          String           @default("")
+  generatedDescription String?
+  status               String           @default("DRAFT")
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  variants             ProductVariant[]
+  photos               PhotoAsset[]
+  publicationRuns      PublicationRun[]
+}
+
+model ProductVariant {
+  id                String          @id @default(cuid())
+  productId         String
+  product           ProductTemplate @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color             String
+  size              String
+  sku               String          @unique
+  price             Int
+  stockQty          Int             @default(1)
+  avitoExternalId   String?
+  publicationStatus String          @default("DRAFT")
+  sortOrder         Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([productId, color, size])
+  @@index([productId, color])
+}
+
+model PhotoAsset {
+  id           String          @id @default(cuid())
+  productId    String
+  product      ProductTemplate @relation(fields: [productId], references: [id], onDelete: Cascade)
+  originalName String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  color        String?
+  sortOrder    Int             @default(0)
+  localPath    String
+  publicUrl    String
+  createdAt    DateTime        @default(now())
+
+  @@index([productId, color])
+}
+
+model PublicationRun {
+  id           String           @id @default(cuid())
+  productId    String?
+  product      ProductTemplate? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  feedVersion  String
+  status       String           @default("SUBMITTED")
+  submittedAt  DateTime         @default(now())
+  reportStatus String?
+  errorsJson   String           @default("[]")
+  warningsJson String           @default("[]")
+  rawReport    String?
+}
+
+model AvitoSettings {
+  id                    String   @id @default("default")
+  clientId              String?
+  clientSecretEncrypted String?
+  sellerLocation        String?
+  contactName           String?
+  phone                 String?
+  email                 String?
+  address               String?
+  publicFeedUrl         String?
+  redirectUrl           String?
+  updatedAt             DateTime @updatedAt
+}
