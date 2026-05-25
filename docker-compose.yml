@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   avito-manager:
     build: .
@@ -5,14 +7,16 @@ services:
     restart: unless-stopped
     ports:
       - "4317:4317"
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: "file:./../data/prod.db"
-      APP_PUBLIC_URL: "https://amsterdam2.sebog1.ru"
-      APP_PORT: "4317"
-      AVITO_API_BASE_URL: "https://api.avito.ru"
-      AVITO_REDIRECT_URL: "https://amsterdam2.sebog1.ru/api/avito/oauth/callback"
-      SETTINGS_ENCRYPTION_KEY: "${SETTINGS_ENCRYPTION_KEY:-replace-this-before-production}"
-      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
-      OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4.1-mini}"
+      DATABASE_URL: "${DATABASE_URL}"
+      APP_PUBLIC_URL: "${APP_PUBLIC_URL}"
+      APP_PORT: "${APP_PORT}"
+      AVITO_API_BASE_URL: "${AVITO_API_BASE_URL}"
+      AVITO_REDIRECT_URL: "${AVITO_REDIRECT_URL}"
+      SETTINGS_ENCRYPTION_KEY: "${SETTINGS_ENCRYPTION_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      OPENAI_MODEL: "${OPENAI_MODEL}"
     volumes:
       - ./data:/app/data

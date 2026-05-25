@@ -35,14 +35,14 @@ nano .env
 Recommended production values:
 
 ```env
-DATABASE_URL="file:./../data/prod.db"
-APP_PUBLIC_URL="https://amsterdam2.sebog1.ru"
-APP_PORT="4317"
-AVITO_API_BASE_URL="https://api.avito.ru"
-AVITO_REDIRECT_URL="https://amsterdam2.sebog1.ru/api/avito/oauth/callback"
-SETTINGS_ENCRYPTION_KEY="put-a-long-random-secret-here"
+DATABASE_URL=file:./../data/prod.db
+APP_PUBLIC_URL=https://amsterdam2.sebog1.ru
+APP_PORT=4317
+AVITO_API_BASE_URL=https://api.avito.ru
+AVITO_REDIRECT_URL=https://amsterdam2.sebog1.ru/api/avito/oauth/callback
+SETTINGS_ENCRYPTION_KEY=put-a-long-random-secret-here
 OPENAI_API_KEY=""
-OPENAI_MODEL="gpt-4.1-mini"
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
 Generate a strong secret:
@@ -53,9 +53,31 @@ openssl rand -base64 48
 
 ### 3. Start with Docker Compose
 
+For modern Docker:
+
 ```bash
 docker compose up -d --build
 docker compose logs -f
+```
+
+For legacy Docker / old VPS installations:
+
+```bash
+docker-compose up -d --build
+docker-compose logs -f
+```
+
+Or use the helper script that auto-detects the available command:
+
+```bash
+sh scripts/deploy.sh
+```
+
+If `docker-compose` is not installed:
+
+```bash
+sudo apt update
+sudo apt install -y docker-compose
 ```
 
 The container maps:
@@ -125,6 +147,5 @@ Public Avito feed URL: https://amsterdam2.sebog1.ru/api/avito/feed.xml
 ```bash
 cd /opt/SEB0G1SHOPCHIK
 git pull
-docker compose up -d --build
-docker compose logs -f
+sh scripts/deploy.sh
 ```
