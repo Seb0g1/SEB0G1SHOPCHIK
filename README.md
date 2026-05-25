@@ -1,6 +1,6 @@
 # SEB0G1SHOPCHIK
 
-Avito Dropshipping Manager: single-user web app for preparing Avito listings with product templates, color/size variants, photo sets, Avito-safe descriptions, XML feed export, and an isolated Avito API adapter.
+SEB0G1SHOPCHIK is a single-user Avito product manager for product templates, color/size variants, photo sets, Avito-safe descriptions, API settings, and publication control.
 
 ## Local Run
 
@@ -139,7 +139,7 @@ amsterdam2.sebog1.ru -> YOUR_VPS_PUBLIC_IP
 ```text
 App: https://amsterdam2.sebog1.ru
 Avito redirect URL: https://amsterdam2.sebog1.ru/api/avito/oauth/callback
-Public Avito feed URL: https://amsterdam2.sebog1.ru/api/avito/feed.xml
+Publication flow: Avito API
 ```
 
 ## Updating Deployment

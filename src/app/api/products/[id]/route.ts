@@ -14,6 +14,10 @@ const updateProductSchema = z.object({
   basePrice: z.coerce.number().int().min(0).optional(),
   description: z.string().optional(),
   generatedDescription: z.string().nullable().optional(),
+  avitoCategorySlug: z.string().nullable().optional(),
+  avitoCategoryName: z.string().nullable().optional(),
+  avitoFields: z.record(z.string(), z.string()).optional(),
+  publicationErrors: z.array(z.string()).optional(),
   status: z.string().optional(),
   variants: z
     .array(

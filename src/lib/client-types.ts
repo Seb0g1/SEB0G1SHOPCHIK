@@ -49,6 +49,11 @@ export type ClientProduct = {
   basePrice: number;
   description: string;
   generatedDescription: string | null;
+  avitoCategorySlug: string | null;
+  avitoCategoryName: string | null;
+  avitoFields: Record<string, string>;
+  publicationErrors: string[];
+  lastApiSyncAt: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;

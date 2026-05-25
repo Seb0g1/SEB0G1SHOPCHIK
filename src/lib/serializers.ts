@@ -13,6 +13,11 @@ type ProductRecord = {
   basePrice: number;
   description: string;
   generatedDescription: string | null;
+  avitoCategorySlug: string | null;
+  avitoCategoryName: string | null;
+  avitoFieldsJson: string;
+  publicationErrorsJson: string;
+  lastApiSyncAt: Date | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -56,6 +61,9 @@ type ProductRecord = {
 export function toClientProduct(product: ProductRecord): ClientProduct {
   return {
     ...product,
+    avitoFields: parseJsonObject(product.avitoFieldsJson),
+    publicationErrors: parseJsonList(product.publicationErrorsJson),
+    lastApiSyncAt: product.lastApiSyncAt?.toISOString() ?? null,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
     variants: product.variants.map((variant) => ({ ...variant })),
@@ -107,6 +115,18 @@ export function parseJsonList(value: string): string[] {
     return Array.isArray(parsed) ? parsed.map(String) : [];
   } catch {
     return [];
+  }
+}
+
+export function parseJsonObject(value: string): Record<string, string> {
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).map(([key, item]) => [key, item === null || item === undefined ? "" : String(item)]),
+    );
+  } catch {
+    return {};
   }
 }
 

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRawAvitoSettings } from "@/lib/settings";
 import { AvitoClient } from "@/lib/avito/client";
-import { validateProductForFeed } from "@/lib/xml";
+import { getCatalogFields } from "@/lib/avito/catalog";
+import { validateProductForApi } from "@/lib/product-validation";
 
 export async function POST(_: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -16,16 +17,13 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
 
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-  const errors = validateProductForFeed(product);
+  const catalog = product.avitoCategorySlug ? await getCatalogFields(product.avitoCategorySlug) : { data: [] };
+  const errors = validateProductForApi(product, catalog.data);
   const warnings: string[] = [];
   const settings = await getRawAvitoSettings();
 
-  if (!settings.publicFeedUrl) {
-    warnings.push("Публичный URL фида не задан в настройках.");
-  }
-
   if (!settings.clientId || !settings.clientSecret) {
-    warnings.push("Avito API-ключи еще не заполнены: фид обновлен локально, API-синхронизация пропущена.");
+    warnings.push("Avito API-ключи еще не заполнены: отправка в Авито пропущена.");
   } else if (!errors.length) {
     try {
       const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret });
@@ -49,7 +47,7 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
         .replaceAll("Z", "")
         .slice(0, 14),
       status,
-      reportStatus: status === "ERROR" ? "local_validation_failed" : "feed_ready",
+      reportStatus: status === "ERROR" ? "local_validation_failed" : "api_ready",
       errorsJson: JSON.stringify(errors),
       warningsJson: JSON.stringify(warnings),
     },
@@ -62,7 +60,19 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     });
     await prisma.productTemplate.update({
       where: { id },
-      data: { status: "READY" },
+      data: {
+        status: warnings.length ? "WARNING" : "READY",
+        publicationErrorsJson: "[]",
+        lastApiSyncAt: new Date(),
+      },
+    });
+  } else {
+    await prisma.productTemplate.update({
+      where: { id },
+      data: {
+        status: "ERROR",
+        publicationErrorsJson: JSON.stringify(errors),
+      },
     });
   }
 

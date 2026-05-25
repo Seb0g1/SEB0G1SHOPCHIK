@@ -82,9 +82,39 @@ export class AvitoClient {
     return payload as T;
   }
 
+  async requestUrl<T>(url: string, init: RequestInit = {}): Promise<T> {
+    const token = await this.getAccessToken();
+    const response = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...(init.headers ?? {}),
+      },
+    });
+
+    const payload = await safeJson(response);
+    if (!response.ok) {
+      throw new AvitoApiError("Avito API request failed.", response.status, payload);
+    }
+    return payload as T;
+  }
+
+  async getProfile(): Promise<unknown> {
+    return this.request("/core/v1/accounts/self");
+  }
+
+  async getCatalogTree(): Promise<unknown> {
+    return this.request("/autoload/v1/user-docs/tree");
+  }
+
+  async getNodeFields(slug: string): Promise<unknown> {
+    return this.request(`/autoload/v1/user-docs/node/${encodeURIComponent(slug)}/fields`);
+  }
+
   async testConnection(): Promise<{ ok: boolean; status: string; payload?: unknown }> {
     try {
-      const payload = await this.request<unknown>("/core/v1/accounts/self");
+      const payload = await this.getProfile();
       return { ok: true, status: "connected", payload };
     } catch (error) {
       if (error instanceof AvitoApiError && error.status === 404) {

@@ -9,6 +9,9 @@ const createProductSchema = z.object({
   color: z.string().optional(),
   sizes: z.array(z.string()).optional(),
   stockQty: z.coerce.number().int().min(0).optional(),
+  avitoCategorySlug: z.string().nullable().optional(),
+  avitoCategoryName: z.string().nullable().optional(),
+  avitoFields: z.record(z.string(), z.string()).optional(),
 });
 
 export async function GET() {

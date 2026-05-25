@@ -1,15 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test("creates product and opens publication workflow", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByText("Avito dropshipping manager")).toBeVisible();
+test("creates product through the new CRM flow", async ({ page }) => {
+  await page.goto("/products");
+  await expect(page.getByRole("heading", { name: "SEB0G1SHOPCHIK" })).toBeVisible();
+  await expect(page.getByText("XML feed")).toHaveCount(0);
+  await expect(page.getByText("dropshipping", { exact: false })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Создать" }).click();
-  await expect(page.getByText("Редактор карточки")).toBeVisible();
-
-  await page.getByRole("button", { name: "Генерировать", exact: true }).click();
-  await expect(page.getByText("Превью")).toBeVisible();
-
-  await page.getByRole("button", { name: "Отправить" }).click();
-  await expect(page.getByText("Журнал")).toBeVisible();
+  await page.getByRole("navigation").getByRole("link", { name: "Новый товар" }).click();
+  await expect(page.getByText("Мастер загрузки товара")).toBeVisible();
+  for (let index = 0; index < 5; index += 1) {
+    await page.getByRole("button", { name: "Далее" }).click();
+  }
+  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Проверить и отправить" })).toBeVisible();
 });

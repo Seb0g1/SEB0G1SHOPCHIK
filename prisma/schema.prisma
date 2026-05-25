@@ -8,24 +8,29 @@ datasource db {
 }
 
 model ProductTemplate {
-  id                   String           @id @default(cuid())
-  title                String
-  brand                String?
-  category             String           @default("Личные вещи")
-  goodsType            String           @default("Одежда, обувь, аксессуары")
-  productType          String           @default("Футболки и топы")
-  adType               String           @default("Товар приобретен на продажу")
-  gender               String           @default("Мужская")
-  condition            String           @default("Новое")
-  basePrice            Int              @default(0)
-  description          String           @default("")
-  generatedDescription String?
-  status               String           @default("DRAFT")
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  variants             ProductVariant[]
-  photos               PhotoAsset[]
-  publicationRuns      PublicationRun[]
+  id                    String           @id @default(cuid())
+  title                 String
+  brand                 String?
+  category              String           @default("Личные вещи")
+  goodsType             String           @default("Одежда, обувь, аксессуары")
+  productType           String           @default("Футболки и топы")
+  adType                String           @default("Товар приобретен на продажу")
+  gender                String           @default("Мужская")
+  condition             String           @default("Новое")
+  basePrice             Int              @default(0)
+  description           String           @default("")
+  generatedDescription  String?
+  avitoCategorySlug     String?
+  avitoCategoryName     String?
+  avitoFieldsJson       String           @default("{}")
+  publicationErrorsJson String           @default("[]")
+  lastApiSyncAt         DateTime?
+  status                String           @default("DRAFT")
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  variants              ProductVariant[]
+  photos                PhotoAsset[]
+  publicationRuns       PublicationRun[]
 }
 
 model ProductVariant {
@@ -89,4 +94,11 @@ model AvitoSettings {
   publicFeedUrl         String?
   redirectUrl           String?
   updatedAt             DateTime @updatedAt
+}
+
+model AvitoCatalogCache {
+  key       String   @id
+  dataJson  String
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
 }

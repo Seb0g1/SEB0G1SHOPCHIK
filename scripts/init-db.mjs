@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS "ProductTemplate" (
   "basePrice" INTEGER NOT NULL DEFAULT 0,
   "description" TEXT NOT NULL DEFAULT '',
   "generatedDescription" TEXT,
+  "avitoCategorySlug" TEXT,
+  "avitoCategoryName" TEXT,
+  "avitoFieldsJson" TEXT NOT NULL DEFAULT '{}',
+  "publicationErrorsJson" TEXT NOT NULL DEFAULT '[]',
+  "lastApiSyncAt" DATETIME,
   "status" TEXT NOT NULL DEFAULT 'DRAFT',
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL
@@ -85,11 +90,24 @@ CREATE TABLE IF NOT EXISTS "AvitoSettings" (
   "updatedAt" DATETIME NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "AvitoCatalogCache" (
+  "key" TEXT NOT NULL PRIMARY KEY,
+  "dataJson" TEXT NOT NULL,
+  "expiresAt" DATETIME NOT NULL,
+  "updatedAt" DATETIME NOT NULL
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS "ProductVariant_sku_key" ON "ProductVariant"("sku");
 CREATE INDEX IF NOT EXISTS "ProductVariant_productId_color_idx" ON "ProductVariant"("productId", "color");
 CREATE UNIQUE INDEX IF NOT EXISTS "ProductVariant_productId_color_size_key" ON "ProductVariant"("productId", "color", "size");
 CREATE INDEX IF NOT EXISTS "PhotoAsset_productId_color_idx" ON "PhotoAsset"("productId", "color");
 `);
+
+addColumnIfMissing(db, "ProductTemplate", "avitoCategorySlug", '"avitoCategorySlug" TEXT');
+addColumnIfMissing(db, "ProductTemplate", "avitoCategoryName", '"avitoCategoryName" TEXT');
+addColumnIfMissing(db, "ProductTemplate", "avitoFieldsJson", `"avitoFieldsJson" TEXT NOT NULL DEFAULT '{}'`);
+addColumnIfMissing(db, "ProductTemplate", "publicationErrorsJson", `"publicationErrorsJson" TEXT NOT NULL DEFAULT '[]'`);
+addColumnIfMissing(db, "ProductTemplate", "lastApiSyncAt", '"lastApiSyncAt" DATETIME');
 
 db.close();
 console.log(`SQLite database ready: ${databasePath}`);
@@ -121,4 +139,10 @@ function readEnvDatabaseUrl() {
   } catch {
     return null;
   }
+}
+
+function addColumnIfMissing(database, table, column, definition) {
+  const columns = database.prepare(`PRAGMA table_info("${table}")`).all();
+  if (columns.some((item) => item.name === column)) return;
+  database.exec(`ALTER TABLE "${table}" ADD COLUMN ${definition}`);
 }

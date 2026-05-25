@@ -3,7 +3,7 @@ version: "3.8"
 services:
   avito-manager:
     build: .
-    container_name: avito-dropshipping-manager
+    container_name: seb0g1shopchik
     restart: unless-stopped
     ports:
       - "4317:4317"

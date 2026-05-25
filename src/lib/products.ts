@@ -31,12 +31,18 @@ export async function createProduct(input: {
   color?: string;
   sizes?: string[];
   stockQty?: number;
+  avitoCategorySlug?: string | null;
+  avitoCategoryName?: string | null;
+  avitoFields?: Record<string, string>;
 }) {
   const product = await prisma.productTemplate.create({
     data: {
       title: input.title.trim(),
       brand: input.brand?.trim() || null,
       basePrice: Math.max(0, Math.round(input.basePrice)),
+      avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
+      avitoCategoryName: input.avitoCategoryName?.trim() || null,
+      avitoFieldsJson: JSON.stringify(input.avitoFields ?? {}),
       description: "",
       status: "DRAFT",
     },
@@ -69,6 +75,11 @@ export async function updateProduct(
     basePrice?: number;
     description?: string;
     generatedDescription?: string | null;
+    avitoCategorySlug?: string | null;
+    avitoCategoryName?: string | null;
+    avitoFields?: Record<string, string>;
+    publicationErrors?: string[];
+    lastApiSyncAt?: Date | null;
     status?: string;
     variants?: Array<{
       id: string;
@@ -93,6 +104,11 @@ export async function updateProduct(
     ...(input.basePrice !== undefined ? { basePrice: Math.max(0, Math.round(input.basePrice)) } : {}),
     ...(input.description !== undefined ? { description: input.description } : {}),
     ...(input.generatedDescription !== undefined ? { generatedDescription: input.generatedDescription } : {}),
+    ...(input.avitoCategorySlug !== undefined ? { avitoCategorySlug: input.avitoCategorySlug?.trim() || null } : {}),
+    ...(input.avitoCategoryName !== undefined ? { avitoCategoryName: input.avitoCategoryName?.trim() || null } : {}),
+    ...(input.avitoFields !== undefined ? { avitoFieldsJson: JSON.stringify(input.avitoFields) } : {}),
+    ...(input.publicationErrors !== undefined ? { publicationErrorsJson: JSON.stringify(input.publicationErrors) } : {}),
+    ...(input.lastApiSyncAt !== undefined ? { lastApiSyncAt: input.lastApiSyncAt } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
   };
 
