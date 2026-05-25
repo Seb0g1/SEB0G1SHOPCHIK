@@ -86,6 +86,19 @@ Or use the helper script that auto-detects the available command:
 sh scripts/deploy.sh
 ```
 
+If legacy `docker-compose 1.29.x` fails with `KeyError: 'ContainerConfig'`, remove only this app's old containers and recreate:
+
+```bash
+docker-compose down --remove-orphans || true
+docker rm -f seb0g1shopchik seb0g1shopchik-worker avito-dropshipping-manager 2>/dev/null || true
+docker ps -a --filter "name=avito-dropshipping-manager"
+docker-compose build --pull
+docker-compose up -d --force-recreate --remove-orphans
+docker-compose logs -f
+```
+
+The app data is stored in `./data`, so recreating containers does not remove products, photos, or SQLite data.
+
 If `docker-compose` is not installed:
 
 ```bash
