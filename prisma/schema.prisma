@@ -102,3 +102,68 @@ model AvitoCatalogCache {
   expiresAt DateTime
   updatedAt DateTime @updatedAt
 }
+
+model Review {
+  id            String            @id @default(cuid())
+  avitoReviewId String            @unique
+  rating        Int
+  text          String
+  authorName    String?
+  itemId        String?
+  itemTitle     String?
+  status        String            @default("NEW")
+  rawJson       String            @default("{}")
+  avitoCreatedAt DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  replyDraft    ReviewReplyDraft?
+
+  @@index([rating, status])
+  @@index([avitoCreatedAt])
+}
+
+model ReviewReplyDraft {
+  id         String         @id @default(cuid())
+  reviewId   String         @unique
+  review     Review         @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  templateId String?
+  template   ReplyTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  text       String
+  status     String         @default("DRAFT")
+  sentAt     DateTime?
+  error      String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([status])
+  @@index([templateId])
+}
+
+model ReplyTemplate {
+  id        String             @id @default(cuid())
+  name      String
+  ratingMin Int                @default(1)
+  ratingMax Int                @default(5)
+  keywords  String             @default("")
+  text      String
+  priority  Int                @default(0)
+  active    Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  drafts    ReviewReplyDraft[]
+
+  @@index([active, priority])
+}
+
+model AutomationState {
+  id                 String    @id @default("default")
+  onlineEnabled      Boolean   @default(false)
+  reviewsEnabled     Boolean   @default(true)
+  draftsEnabled      Boolean   @default(true)
+  status             String    @default("IDLE")
+  lastOnlinePingAt   DateTime?
+  lastReviewsSyncAt  DateTime?
+  lastError          String?
+  capabilitiesJson   String    @default("{}")
+  updatedAt          DateTime  @updatedAt
+}

@@ -73,3 +73,57 @@ export type ClientAvitoSettings = {
   publicFeedUrl: string;
   redirectUrl: string;
 };
+
+export type ClientReplyTemplate = {
+  id: string;
+  name: string;
+  ratingMin: number;
+  ratingMax: number;
+  keywords: string;
+  text: string;
+  priority: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClientReviewDraft = {
+  id: string;
+  reviewId: string;
+  templateId: string | null;
+  text: string;
+  status: string;
+  sentAt: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  template: ClientReplyTemplate | null;
+};
+
+export type ClientReview = {
+  id: string;
+  avitoReviewId: string;
+  rating: number;
+  text: string;
+  authorName: string | null;
+  itemId: string | null;
+  itemTitle: string | null;
+  status: string;
+  avitoCreatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  replyDraft: ClientReviewDraft | null;
+};
+
+export type ClientAutomationState = {
+  id: string;
+  onlineEnabled: boolean;
+  reviewsEnabled: boolean;
+  draftsEnabled: boolean;
+  status: string;
+  lastOnlinePingAt: string | null;
+  lastReviewsSyncAt: string | null;
+  lastError: string | null;
+  capabilities: Record<string, unknown>;
+  updatedAt: string;
+};

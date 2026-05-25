@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { CheckCircle2, Save, ShieldCheck } from "lucide-react";
-import type { ClientAvitoSettings } from "@/lib/client-types";
+import type { ClientAutomationState, ClientAvitoSettings } from "@/lib/client-types";
 import { Button, PageHeader, TextField, requestJson } from "@/components/ui-kit";
 
 export function SettingsPage({ initialSettings }: { initialSettings: ClientAvitoSettings }) {
@@ -10,6 +11,13 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
   const [secretDraft, setSecretDraft] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [automation, setAutomation] = useState<ClientAutomationState | null>(null);
+
+  useEffect(() => {
+    requestJson<{ automation: ClientAutomationState }>("/api/automation")
+      .then((payload) => setAutomation(payload.automation))
+      .catch(() => undefined);
+  }, []);
 
   async function save() {
     setBusy("save");
@@ -105,9 +113,32 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
               Товары отправляются через Avito API. Технические URL скрыты из рабочего интерфейса.
             </p>
           </div>
+          <div className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <h2 className="font-semibold">Capabilities</h2>
+            <div className="mt-3 space-y-2 text-sm text-moss">
+              <CapabilityLine label="Отзывы" value={automation?.capabilities.reviews} />
+              <CapabilityLine label="Ответы" value={automation?.capabilities.reviewReplies} />
+              <CapabilityLine label="Online presence" value={automation?.capabilities.onlinePresence} />
+            </div>
+            <Link className="mt-4 inline-flex text-sm font-semibold text-sea" href="/automation">
+              Открыть автоматизацию
+            </Link>
+          </div>
           {message ? <p className="rounded-md bg-ink p-3 text-sm font-semibold text-white">{message}</p> : null}
         </aside>
       </div>
     </>
+  );
+}
+
+function CapabilityLine({ label, value }: { label: string; value: unknown }) {
+  const item = typeof value === "object" && value ? (value as { available?: boolean; status?: string | number }) : null;
+  return (
+    <p className="flex items-center justify-between gap-3">
+      <span>{label}</span>
+      <span className={item?.available ? "font-semibold text-emerald-700" : "font-semibold text-zinc-600"}>
+        {item ? (item.available ? "доступно" : item.status || "нет доступа") : "не проверено"}
+      </span>
+    </p>
   );
 }

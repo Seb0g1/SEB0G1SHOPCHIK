@@ -2,6 +2,7 @@ version: "3.8"
 
 services:
   avito-manager:
+    image: seb0g1shopchik:latest
     build: .
     container_name: seb0g1shopchik
     restart: unless-stopped
@@ -15,6 +16,40 @@ services:
       APP_PORT: "${APP_PORT}"
       AVITO_API_BASE_URL: "${AVITO_API_BASE_URL}"
       AVITO_REDIRECT_URL: "${AVITO_REDIRECT_URL}"
+      AVITO_ACCOUNT_ID: "${AVITO_ACCOUNT_ID}"
+      AVITO_REVIEWS_LIST_PATH: "${AVITO_REVIEWS_LIST_PATH}"
+      AVITO_REVIEW_DETAIL_PATH: "${AVITO_REVIEW_DETAIL_PATH}"
+      AVITO_REVIEW_REPLY_PATH: "${AVITO_REVIEW_REPLY_PATH}"
+      AVITO_ONLINE_PRESENCE_PATH: "${AVITO_ONLINE_PRESENCE_PATH}"
+      SETTINGS_ENCRYPTION_KEY: "${SETTINGS_ENCRYPTION_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      OPENAI_MODEL: "${OPENAI_MODEL}"
+    volumes:
+      - ./data:/app/data
+
+  avito-worker:
+    image: seb0g1shopchik:latest
+    build: .
+    container_name: seb0g1shopchik-worker
+    restart: unless-stopped
+    command: ["npm", "run", "worker"]
+    depends_on:
+      - avito-manager
+    env_file:
+      - .env
+    environment:
+      APP_INTERNAL_URL: "http://avito-manager:4317"
+      DATABASE_URL: "${DATABASE_URL}"
+      APP_PUBLIC_URL: "${APP_PUBLIC_URL}"
+      AVITO_API_BASE_URL: "${AVITO_API_BASE_URL}"
+      AVITO_REDIRECT_URL: "${AVITO_REDIRECT_URL}"
+      AVITO_ACCOUNT_ID: "${AVITO_ACCOUNT_ID}"
+      AVITO_REVIEWS_LIST_PATH: "${AVITO_REVIEWS_LIST_PATH}"
+      AVITO_REVIEW_DETAIL_PATH: "${AVITO_REVIEW_DETAIL_PATH}"
+      AVITO_REVIEW_REPLY_PATH: "${AVITO_REVIEW_REPLY_PATH}"
+      AVITO_ONLINE_PRESENCE_PATH: "${AVITO_ONLINE_PRESENCE_PATH}"
+      AVITO_WORKER_ONLINE_INTERVAL_SECONDS: "${AVITO_WORKER_ONLINE_INTERVAL_SECONDS}"
+      AVITO_WORKER_REVIEWS_INTERVAL_SECONDS: "${AVITO_WORKER_REVIEWS_INTERVAL_SECONDS}"
       SETTINGS_ENCRYPTION_KEY: "${SETTINGS_ENCRYPTION_KEY}"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
       OPENAI_MODEL: "${OPENAI_MODEL}"

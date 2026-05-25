@@ -1,6 +1,6 @@
 # SEB0G1SHOPCHIK
 
-SEB0G1SHOPCHIK is a single-user Avito product manager for product templates, color/size variants, photo sets, Avito-safe descriptions, API settings, and publication control.
+SEB0G1SHOPCHIK is a single-user Avito product manager for product templates, color/size variants, photo sets, Avito-safe descriptions, API settings, publication control, online presence checks, and review reply drafts.
 
 ## Local Run
 
@@ -12,6 +12,12 @@ npm.cmd run dev
 ```
 
 Open `http://localhost:4317`.
+
+Run the background worker in a second terminal when you want local online/review automation:
+
+```powershell
+npm.cmd run worker
+```
 
 ## VPS Deploy
 
@@ -40,6 +46,13 @@ APP_PUBLIC_URL=https://amsterdam2.sebog1.ru
 APP_PORT=4317
 AVITO_API_BASE_URL=https://api.avito.ru
 AVITO_REDIRECT_URL=https://amsterdam2.sebog1.ru/api/avito/oauth/callback
+AVITO_ACCOUNT_ID=self
+AVITO_REVIEWS_LIST_PATH=/ratings/v1/reviews
+AVITO_REVIEW_DETAIL_PATH=/ratings/v1/reviews/{reviewId}
+AVITO_REVIEW_REPLY_PATH=/ratings/v1/reviews/{reviewId}/reply
+AVITO_ONLINE_PRESENCE_PATH=/messenger/v1/accounts/{accountId}/online
+AVITO_WORKER_ONLINE_INTERVAL_SECONDS=45
+AVITO_WORKER_REVIEWS_INTERVAL_SECONDS=180
 SETTINGS_ENCRYPTION_KEY=put-a-long-random-secret-here
 OPENAI_API_KEY=""
 OPENAI_MODEL=gpt-4.1-mini
@@ -80,7 +93,14 @@ sudo apt update
 sudo apt install -y docker-compose
 ```
 
-The container maps:
+Docker Compose starts two services:
+
+```text
+avito-manager -> Next.js app
+avito-worker  -> online/reviews worker
+```
+
+The app container maps:
 
 ```text
 127.0.0.1:4317 -> app:4317
@@ -140,7 +160,11 @@ amsterdam2.sebog1.ru -> YOUR_VPS_PUBLIC_IP
 App: https://amsterdam2.sebog1.ru
 Avito redirect URL: https://amsterdam2.sebog1.ru/api/avito/oauth/callback
 Publication flow: Avito API
+Reviews flow: Avito API -> local drafts -> manual send
+Online flow: official Avito API presence ping if the account has access
 ```
+
+If Avito API catalog shows different endpoint paths for your account, change `AVITO_REVIEWS_LIST_PATH`, `AVITO_REVIEW_REPLY_PATH`, and `AVITO_ONLINE_PRESENCE_PATH` in `.env`, then restart Docker Compose.
 
 ## Updating Deployment
 
@@ -148,4 +172,10 @@ Publication flow: Avito API
 cd /opt/SEB0G1SHOPCHIK
 git pull
 sh scripts/deploy.sh
+```
+
+Useful worker logs:
+
+```bash
+docker-compose logs -f avito-worker
 ```

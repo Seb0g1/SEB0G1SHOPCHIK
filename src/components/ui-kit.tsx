@@ -136,11 +136,11 @@ export function SelectField({
 
 export function StatusPill({ status }: { status: string }) {
   const tone =
-    status === "READY" || status === "SUBMITTED"
+    status === "READY" || status === "SUBMITTED" || status === "SENT" || status === "ONLINE_OK" || status === "REVIEWS_SYNCED"
       ? "ok"
-      : status === "ERROR" || status === "SUSPENDED"
+      : status === "ERROR" || status === "SUSPENDED" || status === "FAILED" || status.endsWith("_ERROR")
         ? "bad"
-        : status === "WARNING"
+        : status === "WARNING" || status === "DRAFT" || status === "NO_REPLY" || status.endsWith("_UNAVAILABLE")
           ? "warn"
           : "neutral";
   return (
