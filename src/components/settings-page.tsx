@@ -68,23 +68,7 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
       setMessage("Сначала сохраните Client ID.");
       return;
     }
-    const scopes = [
-      "autoload:reports",
-      "items:apply_vas",
-      "items:info",
-      "messenger:read",
-      "messenger:write",
-      "stats:read",
-      "user:read",
-      "user_balance:read",
-      "user_operations:read",
-    ];
-    const url = new URL("https://avito.ru/oauth");
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("client_id", settings.clientId);
-    url.searchParams.set("redirect_uri", settings.redirectUrl);
-    url.searchParams.set("scope", scopes.join(" "));
-    window.location.href = url.toString();
+    window.location.href = buildOAuthUrl(settings.clientId, settings.redirectUrl, ["user:read", "autoload:reports"]);
   }
 
   return (
@@ -158,6 +142,7 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
             </div>
             <p className="mt-4 break-all rounded-md bg-canvas p-3 text-sm font-semibold">{settings.redirectUrl}</p>
             <p className="mt-3 text-sm leading-6 text-moss">Для вашего приложения Avito используется корень домена. Если Avito вернет code на главную страницу, SEB0G1SHOPCHIK сам обработает его.</p>
+            <p className="mt-2 text-sm leading-6 text-moss">Кнопка подключения запрашивает минимальные доступы user:read и autoload:reports, чтобы Avito не падал на расширенном наборе scope.</p>
           </div>
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <h2 className="font-semibold">Состояние сохранения</h2>
@@ -190,6 +175,18 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
       </div>
     </>
   );
+}
+
+function buildOAuthUrl(clientId: string, redirectUrl: string, scopes: string[]) {
+  const query = [
+    ["response_type", "code"],
+    ["client_id", clientId],
+    ["redirect_uri", redirectUrl],
+    ["scope", scopes.join(" ")],
+  ]
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value).replace(/%20/g, "%20")}`)
+    .join("&");
+  return `https://avito.ru/oauth?${query}`;
 }
 
 function SettingsStatusLine({ label, value }: { label: string; value: string }) {
