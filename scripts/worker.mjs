@@ -1,12 +1,20 @@
 const appUrl = (process.env.APP_INTERNAL_URL || process.env.APP_PUBLIC_URL || "http://localhost:4317").replace(/\/$/, "");
 const onlineInterval = toInterval(process.env.AVITO_WORKER_ONLINE_INTERVAL_SECONDS, 45);
 const reviewsInterval = toInterval(process.env.AVITO_WORKER_REVIEWS_INTERVAL_SECONDS, 180);
+const messagesInterval = toInterval(process.env.AVITO_WORKER_MESSAGES_INTERVAL_SECONDS, 45);
+const reportsInterval = toInterval(process.env.AVITO_WORKER_REPORTS_INTERVAL_SECONDS, 300);
 
 let lastOnlineAt = 0;
 let lastReviewsAt = 0;
+let lastMessagesAt = 0;
+let lastReportsAt = 0;
 
 console.log(`Avito worker started. App URL: ${appUrl}`);
-console.log(`Online interval: ${onlineInterval / 1000}s, reviews interval: ${reviewsInterval / 1000}s`);
+console.log(
+  `Online: ${onlineInterval / 1000}s, reviews: ${reviewsInterval / 1000}s, messages: ${messagesInterval / 1000}s, reports: ${
+    reportsInterval / 1000
+  }s`,
+);
 
 while (true) {
   const now = Date.now();
@@ -19,6 +27,17 @@ while (true) {
   if (now - lastReviewsAt >= reviewsInterval) {
     lastReviewsAt = now;
     await post("/api/automation/sync-reviews", { force: false });
+  }
+
+  if (now - lastMessagesAt >= messagesInterval) {
+    lastMessagesAt = now;
+    await post("/api/automation/sync-messages", { force: false });
+    await post("/api/automation/process-message-rules", { force: false });
+  }
+
+  if (now - lastReportsAt >= reportsInterval) {
+    lastReportsAt = now;
+    await post("/api/automation/sync-reports", { force: false });
   }
 
   await sleep(1000);

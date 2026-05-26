@@ -8,6 +8,7 @@ export async function GET() {
       where: { status: { not: "ARCHIVED" } },
       include: {
         variants: { orderBy: [{ color: "asc" }, { sortOrder: "asc" }] },
+        colorGroups: { orderBy: [{ sortOrder: "asc" }, { color: "asc" }] },
         photos: { orderBy: [{ color: "asc" }, { sortOrder: "asc" }] },
       },
     }),

@@ -8,18 +8,18 @@ import type { ClientReview } from "@/lib/client-types";
 import { Button, EmptyState, PageHeader, StatusPill, requestJson } from "@/components/ui-kit";
 
 const filters = [
-  { id: "all", label: "Все" },
+  { id: "new", label: "Новые" },
   { id: "draft", label: "Черновики" },
-  { id: "sent", label: "Отправлены" },
+  { id: "sent", label: "Авто/отправлены" },
   { id: "failed", label: "Ошибки" },
-  { id: "none", label: "Без ответа" },
-  { id: "low", label: "1-2★" },
+  { id: "low", label: "Низкая оценка" },
+  { id: "all", label: "Все" },
 ];
 
 export function ReviewsPage({ initialReviews }: { initialReviews: ClientReview[] }) {
   const [reviews, setReviews] = useState(initialReviews);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("new");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -30,32 +30,35 @@ export function ReviewsPage({ initialReviews }: { initialReviews: ClientReview[]
       const draftStatus = review.replyDraft?.status;
       const matchesFilter =
         filter === "all" ||
+        (filter === "new" && !review.replyDraft) ||
         (filter === "draft" && draftStatus === "DRAFT") ||
         (filter === "sent" && draftStatus === "SENT") ||
         (filter === "failed" && draftStatus === "FAILED") ||
-        (filter === "none" && !review.replyDraft) ||
         (filter === "low" && review.rating <= 2);
       return matchesQuery && matchesFilter;
     });
   }, [reviews, query, filter]);
 
-  const averageRating = reviews.length
-    ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
-    : "0.0";
+  const averageRating = reviews.length ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1) : "0.0";
   const drafts = reviews.filter((review) => review.replyDraft?.status === "DRAFT").length;
+  const sent = reviews.filter((review) => review.replyDraft?.status === "SENT").length;
   const failed = reviews.filter((review) => review.replyDraft?.status === "FAILED").length;
 
   async function sync() {
     setBusy(true);
     setMessage("");
     try {
-      const result = await requestJson<{ ok: boolean; synced: number; drafts: number; message?: string }>(
+      const result = await requestJson<{ ok: boolean; synced: number; drafts: number; autoSent?: number; message?: string }>(
         "/api/automation/sync-reviews",
         { method: "POST", body: JSON.stringify({ force: true }) },
       );
       const payload = await requestJson<{ reviews: ClientReview[] }>("/api/reviews");
       setReviews(payload.reviews);
-      setMessage(result.ok ? `Синхронизировано: ${result.synced}, черновиков: ${result.drafts}` : result.message || "");
+      setMessage(
+        result.ok
+          ? `Синхронизировано: ${result.synced}, черновиков: ${result.drafts}, автоотправлено: ${result.autoSent ?? 0}`
+          : result.message || "",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось синхронизировать отзывы");
     } finally {
@@ -66,8 +69,8 @@ export function ReviewsPage({ initialReviews }: { initialReviews: ClientReview[]
   return (
     <>
       <PageHeader
-        eyebrow="Онлайн и отзывы"
-        title="Отзывы Avito"
+        eyebrow="Отзывы Avito"
+        title="Очередь ответов"
         actions={
           <Button tone="secondary" busy={busy} onClick={sync}>
             <RefreshCw className="h-4 w-4" />
@@ -76,10 +79,11 @@ export function ReviewsPage({ initialReviews }: { initialReviews: ClientReview[]
         }
       />
       <div className="space-y-4 p-4 xl:p-6">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Metric label="Средний рейтинг" value={averageRating} icon={<Star className="h-5 w-5 text-honey" />} />
-          <Metric label="Черновиков ответов" value={drafts} />
-          <Metric label="Ошибок отправки" value={failed} danger={failed > 0} />
+          <Metric label="Черновиков" value={drafts} />
+          <Metric label="Отправлено" value={sent} />
+          <Metric label="Ошибок" value={failed} danger={failed > 0} />
         </div>
 
         <div className="flex flex-col gap-3 rounded-md border border-line bg-white p-3 shadow-panel lg:flex-row lg:items-center lg:justify-between">
@@ -96,9 +100,7 @@ export function ReviewsPage({ initialReviews }: { initialReviews: ClientReview[]
             {filters.map((item) => (
               <button
                 key={item.id}
-                className={`h-10 rounded-md px-3 text-sm font-semibold ${
-                  filter === item.id ? "bg-ink text-white" : "border border-line bg-white text-ink hover:bg-canvas"
-                }`}
+                className={`h-10 rounded-md px-3 text-sm font-semibold ${filter === item.id ? "bg-ink text-white" : "border border-line bg-white text-ink hover:bg-canvas"}`}
                 type="button"
                 onClick={() => setFilter(item.id)}
               >
@@ -138,7 +140,7 @@ export function ReviewsPage({ initialReviews }: { initialReviews: ClientReview[]
           </div>
         ) : (
           <EmptyState
-            title="Отзывы пока не синхронизированы"
+            title="В этой очереди пока пусто"
             action={
               <Button busy={busy} onClick={sync}>
                 <MessageSquareText className="h-4 w-4" />
@@ -152,17 +154,7 @@ export function ReviewsPage({ initialReviews }: { initialReviews: ClientReview[]
   );
 }
 
-function Metric({
-  label,
-  value,
-  icon,
-  danger = false,
-}: {
-  label: string;
-  value: string | number;
-  icon?: ReactNode;
-  danger?: boolean;
-}) {
+function Metric({ label, value, icon, danger = false }: { label: string; value: string | number; icon?: ReactNode; danger?: boolean }) {
   return (
     <div className="rounded-md border border-line bg-white p-4 shadow-panel">
       <div className="flex items-center justify-between gap-3">
@@ -180,10 +172,7 @@ function Rating({ value }: { value: number }) {
       <span className="text-lg font-semibold">{value}</span>
       <div className="flex">
         {Array.from({ length: 5 }).map((_, index) => (
-          <Star
-            key={index}
-            className={`h-4 w-4 ${index < value ? "fill-honey text-honey" : "text-line"}`}
-          />
+          <Star key={index} className={`h-4 w-4 ${index < value ? "fill-honey text-honey" : "text-line"}`} />
         ))}
       </div>
     </div>

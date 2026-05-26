@@ -1,8 +1,10 @@
 # SEB0G1SHOPCHIK
 
-SEB0G1SHOPCHIK is a single-user Avito product manager for product templates, color/size variants, photo sets, Avito-safe descriptions, API settings, publication control, online presence checks, and review reply drafts.
+Личный Avito-кабинет для товаров, массовой загрузки, матрицы цветов/размеров, публикации через Autoload API, массовой смены цен, отзывов, автоответов в сообщения и online worker.
 
-## Local Run
+Приложение не использует браузерную имитацию, скрейпинг или обходы. Если Авито не выдал доступ к Autoload, Messenger, Reviews или Online endpoint, интерфейс показывает это как ограничение API.
+
+## Локальный запуск
 
 ```powershell
 npm.cmd install
@@ -11,19 +13,31 @@ npm.cmd run db:init
 npm.cmd run dev
 ```
 
-Open `http://localhost:4317`.
+Открыть: `http://localhost:4317`.
 
-Run the background worker in a second terminal when you want local online/review automation:
+Worker для online, отзывов, сообщений и отчетов запускается вторым терминалом:
 
 ```powershell
 npm.cmd run worker
 ```
 
+## Основные страницы
+
+- `/products` — каталог, фильтры, массовая смена цен.
+- `/products/new` — мастер “один бренд + одна категория Avito + много цветов/размеров”.
+- `/products/:id` — редактор параметров, фото по цветам, матрица вариантов, описание, публикация.
+- `/reviews` — очередь отзывов: новые, черновики, автоотправленные, ошибки, низкая оценка.
+- `/templates` — шаблоны ответов на отзывы, включая `autoSend`.
+- `/messages` — чаты и история автоответов.
+- `/message-rules` — правила “если сообщение содержит слова, ответить текстом”.
+- `/automation` — состояние online, отзывов, сообщений, отчетов и последние ошибки API.
+- `/settings` — Avito API, OAuth callback, контакты, Autoload и capabilities.
+
 ## VPS Deploy
 
-The app listens on a nonstandard port: `4317`, so it can live next to other projects on the same VPS.
+Порт приложения: `4317`. Это сделано специально, чтобы проект жил рядом с другими сайтами на VPS.
 
-### 1. Clone on server
+### 1. Клонировать
 
 ```bash
 cd /opt
@@ -31,97 +45,108 @@ git clone https://github.com/Seb0g1/SEB0G1SHOPCHIK.git
 cd SEB0G1SHOPCHIK
 ```
 
-### 2. Create environment file
+### 2. Создать `.env`
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Recommended production values:
+Готовый production-шаблон:
 
 ```env
 DATABASE_URL=file:./../data/prod.db
 APP_PUBLIC_URL=https://amsterdam2.sebog1.ru
 APP_PORT=4317
+SETTINGS_ENCRYPTION_KEY=put-a-long-random-secret-here
+
 AVITO_API_BASE_URL=https://api.avito.ru
 AVITO_REDIRECT_URL=https://amsterdam2.sebog1.ru/api/avito/oauth/callback
 AVITO_ACCOUNT_ID=self
+
+AVITO_AUTOLOAD_PROFILE_PATH=/autoload/v2/profile
+AVITO_AUTOLOAD_UPLOAD_PATH=/autoload/v1/upload
+AVITO_AUTOLOAD_REPORTS_PATH=/autoload/v2/reports
+AVITO_AUTOLOAD_REPORT_PATH=/autoload/v3/reports/{reportId}
+AVITO_AUTOLOAD_LAST_REPORT_PATH=/autoload/v3/reports/last_completed_report
+AVITO_AUTOLOAD_REPORT_ITEMS_PATH=/autoload/v2/reports/{reportId}/items
+
 AVITO_REVIEWS_LIST_PATH=/ratings/v1/reviews
 AVITO_REVIEW_DETAIL_PATH=/ratings/v1/reviews/{reviewId}
 AVITO_REVIEW_REPLY_PATH=/ratings/v1/reviews/{reviewId}/reply
+
+AVITO_MESSENGER_CHATS_PATH=/messenger/v2/accounts/{accountId}/chats
+AVITO_MESSENGER_MESSAGES_PATH=/messenger/v3/accounts/{accountId}/chats/{chatId}/messages
+AVITO_MESSENGER_SEND_PATH=/messenger/v1/accounts/{accountId}/chats/{chatId}/messages
 AVITO_ONLINE_PRESENCE_PATH=/messenger/v1/accounts/{accountId}/online
+
 AVITO_WORKER_ONLINE_INTERVAL_SECONDS=45
 AVITO_WORKER_REVIEWS_INTERVAL_SECONDS=180
-SETTINGS_ENCRYPTION_KEY=put-a-long-random-secret-here
-OPENAI_API_KEY=""
+AVITO_WORKER_MESSAGES_INTERVAL_SECONDS=45
+AVITO_WORKER_REPORTS_INTERVAL_SECONDS=300
+
+OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-Generate a strong secret:
+Секрет для `SETTINGS_ENCRYPTION_KEY`:
 
 ```bash
 openssl rand -base64 48
 ```
 
-### 3. Start with Docker Compose
+Client ID и Client Secret можно ввести на странице `/settings`; они сохраняются в SQLite, secret шифруется.
 
-For modern Docker:
+### 3. Запуск Docker
+
+Современный Docker:
 
 ```bash
 docker compose up -d --build
 docker compose logs -f
 ```
 
-For legacy Docker / old VPS installations:
+Legacy Docker на старом VPS:
 
 ```bash
 docker-compose up -d --build
 docker-compose logs -f
 ```
 
-Or use the helper script that auto-detects the available command:
+Или helper:
 
 ```bash
 sh scripts/deploy.sh
 ```
 
-If legacy `docker-compose 1.29.x` fails with `KeyError: 'ContainerConfig'`, remove only this app's old containers and recreate:
+Если старый `docker-compose 1.29.x` падает с `KeyError: 'ContainerConfig'`, пересоздать контейнеры проекта:
 
 ```bash
 docker-compose down --remove-orphans || true
-docker rm -f seb0g1shopchik seb0g1shopchik-worker avito-dropshipping-manager 2>/dev/null || true
-docker ps -a --filter "name=avito-dropshipping-manager"
+docker rm -f seb0g1shopchik seb0g1shopchik-worker 2>/dev/null || true
 docker-compose build --pull
 docker-compose up -d --force-recreate --remove-orphans
 docker-compose logs -f
 ```
 
-The app data is stored in `./data`, so recreating containers does not remove products, photos, or SQLite data.
+Данные лежат в `./data`, поэтому пересоздание контейнеров не удаляет товары, фото и SQLite.
 
-If `docker-compose` is not installed:
-
-```bash
-sudo apt update
-sudo apt install -y docker-compose
-```
-
-Docker Compose starts two services:
+Compose запускает:
 
 ```text
 avito-manager -> Next.js app
-avito-worker  -> online/reviews worker
+avito-worker  -> online/reviews/messages/reports worker
 ```
 
-The app container maps:
+Проброс:
 
 ```text
 127.0.0.1:4317 -> app:4317
 ```
 
-### 4. Nginx domain binding
+### 4. Nginx домен
 
-Create `/etc/nginx/sites-available/amsterdam2.sebog1.ru`:
+Создать `/etc/nginx/sites-available/amsterdam2.sebog1.ru`:
 
 ```nginx
 server {
@@ -143,15 +168,13 @@ server {
 }
 ```
 
-Enable the site:
-
 ```bash
 sudo ln -s /etc/nginx/sites-available/amsterdam2.sebog1.ru /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 5. HTTPS via Certbot
+### 5. HTTPS
 
 ```bash
 sudo apt update
@@ -161,25 +184,36 @@ sudo certbot --nginx -d amsterdam2.sebog1.ru
 
 ### 6. DNS
 
-Create an `A` record at your DNS provider:
-
 ```text
 amsterdam2.sebog1.ru -> YOUR_VPS_PUBLIC_IP
 ```
 
-## Avito URLs
+## Avito
+
+В Avito developer cabinet лучше указывать OAuth callback:
 
 ```text
-App: https://amsterdam2.sebog1.ru
-Avito redirect URL: https://amsterdam2.sebog1.ru/api/avito/oauth/callback
-Publication flow: Avito API
-Reviews flow: Avito API -> local drafts -> manual send
-Online flow: official Avito API presence ping if the account has access
+https://amsterdam2.sebog1.ru/api/avito/oauth/callback
 ```
 
-If Avito API catalog shows different endpoint paths for your account, change `AVITO_REVIEWS_LIST_PATH`, `AVITO_REVIEW_REPLY_PATH`, and `AVITO_ONLINE_PRESENCE_PATH` in `.env`, then restart Docker Compose.
+Если сейчас принят только корень домена, приложение все равно работает с `client_credentials`, но для OAuth flow callback лучше добавить отдельно.
 
-## Updating Deployment
+Публикация идет скрыто через Autoload:
+
+```text
+1. Приложение генерирует внутренний Autoload URL.
+2. /autoload/v2/profile сохраняет feeds_data.
+3. /autoload/v1/upload запускает выгрузку.
+4. /autoload/v2/reports и /autoload/v3/reports/* подтягивают результат.
+```
+
+Если в Avito API catalog для вашего аккаунта пути отличаются, измените соответствующие `AVITO_*_PATH` в `.env` и перезапустите контейнеры:
+
+```bash
+docker-compose up -d --force-recreate
+```
+
+## Обновление
 
 ```bash
 cd /opt/SEB0G1SHOPCHIK
@@ -187,8 +221,9 @@ git pull
 sh scripts/deploy.sh
 ```
 
-Useful worker logs:
+Логи:
 
 ```bash
+docker-compose logs -f avito-manager
 docker-compose logs -f avito-worker
 ```

@@ -50,6 +50,8 @@ type TemplateRecord = {
   text: string;
   priority: number;
   active: boolean;
+  autoSend: boolean;
+  kind: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -59,9 +61,17 @@ type AutomationRecord = {
   onlineEnabled: boolean;
   reviewsEnabled: boolean;
   draftsEnabled: boolean;
+  reviewAutoSendEnabled: boolean;
+  messagesEnabled: boolean;
+  messageAutoRepliesEnabled: boolean;
+  reportsEnabled: boolean;
   status: string;
   lastOnlinePingAt: Date | null;
   lastReviewsSyncAt: Date | null;
+  lastReviewAutoSendAt: Date | null;
+  lastMessagesSyncAt: Date | null;
+  lastMessageRulesAt: Date | null;
+  lastReportsSyncAt: Date | null;
   lastError: string | null;
   capabilitiesJson: string;
   updatedAt: Date;
@@ -80,6 +90,8 @@ export async function ensureDefaultTemplates() {
         text: template.text,
         priority: template.priority,
         active: template.active,
+        autoSend: false,
+        kind: "REVIEW",
       },
       update: {},
     });
@@ -99,6 +111,10 @@ export async function updateAutomationState(input: {
   onlineEnabled?: boolean;
   reviewsEnabled?: boolean;
   draftsEnabled?: boolean;
+  reviewAutoSendEnabled?: boolean;
+  messagesEnabled?: boolean;
+  messageAutoRepliesEnabled?: boolean;
+  reportsEnabled?: boolean;
 }) {
   const state = await prisma.automationState.upsert({
     where: { id: "default" },
@@ -107,11 +123,19 @@ export async function updateAutomationState(input: {
       onlineEnabled: Boolean(input.onlineEnabled),
       reviewsEnabled: input.reviewsEnabled ?? true,
       draftsEnabled: input.draftsEnabled ?? true,
+      reviewAutoSendEnabled: input.reviewAutoSendEnabled ?? true,
+      messagesEnabled: input.messagesEnabled ?? false,
+      messageAutoRepliesEnabled: input.messageAutoRepliesEnabled ?? false,
+      reportsEnabled: input.reportsEnabled ?? true,
     },
     update: {
       ...(input.onlineEnabled !== undefined ? { onlineEnabled: input.onlineEnabled } : {}),
       ...(input.reviewsEnabled !== undefined ? { reviewsEnabled: input.reviewsEnabled } : {}),
       ...(input.draftsEnabled !== undefined ? { draftsEnabled: input.draftsEnabled } : {}),
+      ...(input.reviewAutoSendEnabled !== undefined ? { reviewAutoSendEnabled: input.reviewAutoSendEnabled } : {}),
+      ...(input.messagesEnabled !== undefined ? { messagesEnabled: input.messagesEnabled } : {}),
+      ...(input.messageAutoRepliesEnabled !== undefined ? { messageAutoRepliesEnabled: input.messageAutoRepliesEnabled } : {}),
+      ...(input.reportsEnabled !== undefined ? { reportsEnabled: input.reportsEnabled } : {}),
     },
   });
   return toClientAutomationState(state);
@@ -254,10 +278,18 @@ export async function syncReviews(options: { force?: boolean } = {}) {
     }
 
     let draftCount = 0;
+    let autoSentCount = 0;
     if (state.draftsEnabled) {
       for (const review of upserted) {
         const draft = await ensureDraftForReview(review.id);
         if (draft?.created) draftCount += 1;
+        if (state.reviewAutoSendEnabled && draft?.draft.templateId) {
+          const template = await prisma.replyTemplate.findUnique({ where: { id: draft.draft.templateId } });
+          if (template?.active && template.autoSend && draft.draft.status === "DRAFT" && draft.draft.text.trim()) {
+            const sent = await sendReviewReply(review.id, draft.draft.text);
+            if (sent.ok) autoSentCount += 1;
+          }
+        }
       }
     }
 
@@ -266,6 +298,7 @@ export async function syncReviews(options: { force?: boolean } = {}) {
       data: {
         status: "REVIEWS_SYNCED",
         lastReviewsSyncAt: new Date(),
+        ...(autoSentCount > 0 ? { lastReviewAutoSendAt: new Date() } : {}),
         lastError: null,
       },
     });
@@ -275,6 +308,7 @@ export async function syncReviews(options: { force?: boolean } = {}) {
       state: toClientAutomationState(updated),
       synced: upserted.length,
       drafts: draftCount,
+      autoSent: autoSentCount,
       payload,
     };
   } catch (error) {
@@ -321,7 +355,7 @@ export async function ensureDraftForReview(reviewId: string, options: { regenera
     return { created: false, draft: toClientDraft(review.replyDraft) };
   }
 
-  const templates = await prisma.replyTemplate.findMany({ where: { active: true } });
+  const templates = await prisma.replyTemplate.findMany({ where: { active: true, kind: "REVIEW" } });
   const matched = selectReplyTemplate(toTemplateReview(review), templates.map(templateToRule));
   if (!matched) return null;
 
@@ -414,7 +448,7 @@ export async function sendReviewReply(reviewId: string, text?: string) {
 
 export async function listTemplates() {
   await ensureDefaultTemplates();
-  const templates = await prisma.replyTemplate.findMany({ orderBy: [{ active: "desc" }, { priority: "desc" }] });
+  const templates = await prisma.replyTemplate.findMany({ orderBy: [{ kind: "asc" }, { active: "desc" }, { priority: "desc" }] });
   return templates.map(toClientTemplate);
 }
 
@@ -426,6 +460,8 @@ export async function createTemplate(input: {
   text: string;
   priority?: number;
   active?: boolean;
+  autoSend?: boolean;
+  kind?: string;
 }) {
   const template = await prisma.replyTemplate.create({
     data: {
@@ -436,6 +472,8 @@ export async function createTemplate(input: {
       text: normalizeAvitoReplyText(input.text),
       priority: input.priority ?? 0,
       active: input.active ?? true,
+      autoSend: input.autoSend ?? false,
+      kind: input.kind ?? "REVIEW",
     },
   });
   return toClientTemplate(template);
@@ -451,6 +489,8 @@ export async function updateTemplate(
     text: string;
     priority: number;
     active: boolean;
+    autoSend: boolean;
+    kind: string;
   }>,
 ) {
   const template = await prisma.replyTemplate.update({
@@ -463,6 +503,8 @@ export async function updateTemplate(
       ...(input.text !== undefined ? { text: normalizeAvitoReplyText(input.text) } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.active !== undefined ? { active: input.active } : {}),
+      ...(input.autoSend !== undefined ? { autoSend: input.autoSend } : {}),
+      ...(input.kind !== undefined ? { kind: input.kind } : {}),
     },
   });
   return toClientTemplate(template);
@@ -623,6 +665,8 @@ function toClientTemplate(template: TemplateRecord) {
     text: template.text,
     priority: template.priority,
     active: template.active,
+    autoSend: template.autoSend,
+    kind: template.kind,
     createdAt: template.createdAt.toISOString(),
     updatedAt: template.updatedAt.toISOString(),
   };
@@ -634,9 +678,17 @@ function toClientAutomationState(state: AutomationRecord) {
     onlineEnabled: state.onlineEnabled,
     reviewsEnabled: state.reviewsEnabled,
     draftsEnabled: state.draftsEnabled,
+    reviewAutoSendEnabled: state.reviewAutoSendEnabled,
+    messagesEnabled: state.messagesEnabled,
+    messageAutoRepliesEnabled: state.messageAutoRepliesEnabled,
+    reportsEnabled: state.reportsEnabled,
     status: state.status,
     lastOnlinePingAt: state.lastOnlinePingAt?.toISOString() ?? null,
     lastReviewsSyncAt: state.lastReviewsSyncAt?.toISOString() ?? null,
+    lastReviewAutoSendAt: state.lastReviewAutoSendAt?.toISOString() ?? null,
+    lastMessagesSyncAt: state.lastMessagesSyncAt?.toISOString() ?? null,
+    lastMessageRulesAt: state.lastMessageRulesAt?.toISOString() ?? null,
+    lastReportsSyncAt: state.lastReportsSyncAt?.toISOString() ?? null,
     lastError: state.lastError,
     capabilities: parseJsonObject(state.capabilitiesJson),
     updatedAt: state.updatedAt.toISOString(),

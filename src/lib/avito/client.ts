@@ -115,6 +115,75 @@ export class AvitoClient {
     return this.request(`/autoload/v1/user-docs/node/${encodeURIComponent(slug)}/fields`);
   }
 
+  async getAutoloadProfile(): Promise<unknown> {
+    const path = configuredPath("AVITO_AUTOLOAD_PROFILE_PATH", "/autoload/v2/profile", {
+      accountId: this.accountId,
+    });
+    return this.requestConfigured(path);
+  }
+
+  async syncAutoloadProfile(input: {
+    feedUrl: string;
+    feedName?: string;
+    reportEmail: string;
+    schedule?: unknown[];
+    enabled?: boolean;
+  }): Promise<unknown> {
+    const path = configuredPath("AVITO_AUTOLOAD_PROFILE_PATH", "/autoload/v2/profile", {
+      accountId: this.accountId,
+    });
+    return this.requestConfigured(path, {
+      method: "POST",
+      body: JSON.stringify({
+        autoload_enabled: input.enabled ?? true,
+        feeds_data: [{ feed_name: input.feedName || "SEB0G1SHOPCHIK", feed_url: input.feedUrl }],
+        report_email: input.reportEmail,
+        schedule: normalizeAutoloadSchedule(input.schedule),
+        agreement: true,
+      }),
+    });
+  }
+
+  async triggerAutoloadUpload(): Promise<unknown> {
+    const path = configuredPath("AVITO_AUTOLOAD_UPLOAD_PATH", "/autoload/v1/upload", {
+      accountId: this.accountId,
+    });
+    return this.requestConfigured(path, { method: "POST" });
+  }
+
+  async getAutoloadReports(params: Record<string, string | number | boolean | undefined> = {}): Promise<unknown> {
+    const path = configuredPath("AVITO_AUTOLOAD_REPORTS_PATH", "/autoload/v2/reports", {
+      accountId: this.accountId,
+    });
+    return this.requestConfigured(path, { method: "GET" }, params);
+  }
+
+  async getAutoloadLastReport(): Promise<unknown> {
+    const path = configuredPath("AVITO_AUTOLOAD_LAST_REPORT_PATH", "/autoload/v3/reports/last_completed_report", {
+      accountId: this.accountId,
+    });
+    return this.requestConfigured(path);
+  }
+
+  async getAutoloadReport(reportId: string | number): Promise<unknown> {
+    const path = configuredPath("AVITO_AUTOLOAD_REPORT_PATH", "/autoload/v3/reports/{reportId}", {
+      accountId: this.accountId,
+      reportId: String(reportId),
+    });
+    return this.requestConfigured(path);
+  }
+
+  async getAutoloadReportItems(
+    reportId: string | number,
+    params: Record<string, string | number | boolean | undefined> = {},
+  ): Promise<unknown> {
+    const path = configuredPath("AVITO_AUTOLOAD_REPORT_ITEMS_PATH", "/autoload/v2/reports/{reportId}/items", {
+      accountId: this.accountId,
+      reportId: String(reportId),
+    });
+    return this.requestConfigured(path, { method: "GET" }, params);
+  }
+
   async getReviews(params: Record<string, string | number | boolean | undefined> = {}): Promise<unknown> {
     const path = configuredPath("AVITO_REVIEWS_LIST_PATH", "/ratings/v1/reviews", {
       accountId: this.accountId,
@@ -155,15 +224,44 @@ export class AvitoClient {
     });
   }
 
+  async getChats(params: Record<string, string | number | boolean | undefined> = {}): Promise<unknown> {
+    const path = configuredPath("AVITO_MESSENGER_CHATS_PATH", "/messenger/v2/accounts/{accountId}/chats", {
+      accountId: this.accountId,
+    });
+    return this.requestConfigured(path, { method: "GET" }, params);
+  }
+
+  async getMessages(chatId: string, params: Record<string, string | number | boolean | undefined> = {}): Promise<unknown> {
+    const path = configuredPath("AVITO_MESSENGER_MESSAGES_PATH", "/messenger/v3/accounts/{accountId}/chats/{chatId}/messages", {
+      accountId: this.accountId,
+      chatId,
+    });
+    return this.requestConfigured(path, { method: "GET" }, params);
+  }
+
+  async sendMessage(chatId: string, text: string): Promise<unknown> {
+    const path = configuredPath("AVITO_MESSENGER_SEND_PATH", "/messenger/v1/accounts/{accountId}/chats/{chatId}/messages", {
+      accountId: this.accountId,
+      chatId,
+    });
+    return this.requestConfigured(path, {
+      method: "POST",
+      body: JSON.stringify({ message: { text }, type: "text" }),
+    });
+  }
+
   async probeCapabilities(): Promise<Record<string, CapabilityProbeResult>> {
     const result: Record<string, CapabilityProbeResult> = {};
 
     result.profile = await probeCapability(() => this.getProfile());
+    result.autoloadProfile = await probeCapability(() => this.getAutoloadProfile());
+    result.autoloadReports = await probeCapability(() => this.getAutoloadReports({ per_page: 1, page: 0 }));
     result.reviews = await probeCapability(() => this.getReviews({ limit: 1 }));
     result.reviewReplies = configuredPathAvailable("AVITO_REVIEW_REPLY_PATH")
       ? { available: true, status: "configured" }
       : { available: false, status: "missing_endpoint", message: "Путь отправки ответов не настроен." };
     result.onlinePresence = await probeCapability(() => this.setOnlinePresence());
+    result.messenger = await probeCapability(() => this.getChats({ limit: 1 }));
 
     return result;
   }
@@ -263,6 +361,17 @@ function appendQuery(pathOrUrl: string, query?: Record<string, string | number |
     params.set(key, String(value));
   }
   return `${pathOrUrl}${separator}${params.toString()}`;
+}
+
+function normalizeAutoloadSchedule(schedule?: unknown[]): unknown[] {
+  if (Array.isArray(schedule) && schedule.length) return schedule;
+  return [
+    {
+      rate: 100,
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+      time_slots: [0, 6, 12, 18],
+    },
+  ];
 }
 
 export function explainAvitoError(error: AvitoApiError): string {

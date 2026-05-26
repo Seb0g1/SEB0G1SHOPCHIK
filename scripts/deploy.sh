@@ -17,7 +17,7 @@ echo "Stopping old project containers..."
 $COMPOSE down --remove-orphans || true
 
 echo "Removing legacy app containers that can break docker-compose 1.29.x recreation..."
-for name in seb0g1shopchik seb0g1shopchik-worker avito-dropshipping-manager; do
+for name in seb0g1shopchik seb0g1shopchik-worker; do
   for id in $(docker ps -a --filter "name=$name" --format "{{.ID}}"); do
     echo "Removing container $id ($name)"
     docker rm -f "$id" >/dev/null 2>&1 || true

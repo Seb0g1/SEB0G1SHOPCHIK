@@ -4,6 +4,7 @@ import { expandVariants, makeSku } from "@/lib/variants";
 
 export const productInclude = {
   variants: { orderBy: [{ color: "asc" as const }, { sortOrder: "asc" as const }, { size: "asc" as const }] },
+  colorGroups: { orderBy: [{ sortOrder: "asc" as const }, { color: "asc" as const }] },
   photos: { orderBy: [{ color: "asc" as const }, { sortOrder: "asc" as const }, { createdAt: "asc" as const }] },
   publicationRuns: { orderBy: { submittedAt: "desc" as const }, take: 8 },
 };
@@ -34,6 +35,15 @@ export async function createProduct(input: {
   avitoCategorySlug?: string | null;
   avitoCategoryName?: string | null;
   avitoFields?: Record<string, string>;
+  colorGroups?: Array<{
+    color: string;
+    avitoColorValue?: string | null;
+    basePrice?: number;
+    defaultStockQty?: number;
+    description?: string;
+    avitoFields?: Record<string, string>;
+    sortOrder?: number;
+  }>;
 }) {
   const product = await prisma.productTemplate.create({
     data: {
@@ -47,6 +57,10 @@ export async function createProduct(input: {
       status: "DRAFT",
     },
   });
+
+  if (input.colorGroups?.length) {
+    await upsertColorGroups(product.id, input.colorGroups);
+  }
 
   if (input.sizes?.length && input.color) {
     await generateVariants(product.id, {
@@ -87,8 +101,20 @@ export async function updateProduct(
       size: string;
       price: number;
       stockQty: number;
+      avitoFields?: Record<string, string>;
+      needsSync?: boolean;
       publicationStatus: string;
       avitoExternalId?: string | null;
+    }>;
+    colorGroups?: Array<{
+      id?: string;
+      color: string;
+      avitoColorValue?: string | null;
+      basePrice: number;
+      defaultStockQty: number;
+      description?: string;
+      avitoFields?: Record<string, string>;
+      sortOrder?: number;
     }>;
   },
 ) {
@@ -123,6 +149,8 @@ export async function updateProduct(
           size: variant.size.trim(),
           price: Math.max(0, Math.round(variant.price)),
           stockQty: Math.max(0, Math.round(variant.stockQty)),
+          avitoFieldsJson: JSON.stringify(variant.avitoFields ?? {}),
+          ...(variant.needsSync !== undefined ? { needsSync: variant.needsSync } : {}),
           publicationStatus: variant.publicationStatus,
           avitoExternalId: variant.avitoExternalId?.trim() || null,
         },
@@ -130,12 +158,75 @@ export async function updateProduct(
     }
   }
 
+  if (input.colorGroups) {
+    await upsertColorGroups(id, input.colorGroups);
+  }
+
   return getProduct(id);
+}
+
+export async function createBulkProduct(input: {
+  title: string;
+  brand?: string;
+  basePrice: number;
+  avitoCategorySlug?: string | null;
+  avitoCategoryName?: string | null;
+  avitoFields?: Record<string, string>;
+  colorGroups: Array<{
+    color: string;
+    avitoColorValue?: string | null;
+    basePrice?: number;
+    defaultStockQty?: number;
+    description?: string;
+    avitoFields?: Record<string, string>;
+    sizes: string[];
+  }>;
+}) {
+  const product = await prisma.productTemplate.create({
+    data: {
+      title: input.title.trim(),
+      brand: input.brand?.trim() || null,
+      basePrice: Math.max(0, Math.round(input.basePrice)),
+      avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
+      avitoCategoryName: input.avitoCategoryName?.trim() || null,
+      avitoFieldsJson: JSON.stringify(input.avitoFields ?? {}),
+      description: "",
+      status: "DRAFT",
+    },
+  });
+
+  await upsertColorGroups(
+    product.id,
+    input.colorGroups.map((group, index) => ({
+      color: group.color,
+      avitoColorValue: group.avitoColorValue ?? group.color,
+      basePrice: group.basePrice ?? product.basePrice,
+      defaultStockQty: group.defaultStockQty ?? 1,
+      description: group.description ?? "",
+      avitoFields: group.avitoFields ?? {},
+      sortOrder: index,
+    })),
+  );
+
+  for (const group of input.colorGroups) {
+    const color = group.avitoColorValue?.trim() || group.color.trim();
+    const sizes = group.sizes.length ? group.sizes : ["ONE_SIZE"];
+    await generateVariants(product.id, {
+      title: product.title,
+      color,
+      sizes,
+      price: group.basePrice ?? product.basePrice,
+      stockQty: group.defaultStockQty ?? 1,
+      variantFields: group.avitoFields ?? {},
+    });
+  }
+
+  return getProduct(product.id);
 }
 
 export async function generateVariants(
   productId: string,
-  input: { title: string; color: string; sizes: string[]; price: number; stockQty: number },
+  input: { title: string; color: string; sizes: string[]; price: number; stockQty: number; variantFields?: Record<string, string> },
 ) {
   const variants = expandVariants({
     productId,
@@ -162,12 +253,16 @@ export async function generateVariants(
         sku: makeSku(`${productId}:${input.title}`, variant.color, variant.size),
         price: variant.price,
         stockQty: variant.stockQty,
+        avitoFieldsJson: JSON.stringify(input.variantFields ?? {}),
+        needsSync: true,
         sortOrder: variant.sortOrder ?? 0,
         publicationStatus: "DRAFT",
       },
       update: {
         price: variant.price,
         stockQty: variant.stockQty,
+        avitoFieldsJson: JSON.stringify(input.variantFields ?? {}),
+        needsSync: true,
         sortOrder: variant.sortOrder ?? 0,
         publicationStatus: "DRAFT",
       },
@@ -175,4 +270,44 @@ export async function generateVariants(
   }
 
   return getProduct(productId);
+}
+
+export async function upsertColorGroups(
+  productId: string,
+  groups: Array<{
+    id?: string;
+    color: string;
+    avitoColorValue?: string | null;
+    basePrice?: number;
+    defaultStockQty?: number;
+    description?: string;
+    avitoFields?: Record<string, string>;
+    sortOrder?: number;
+  }>,
+) {
+  for (const [index, group] of groups.entries()) {
+    const color = group.color.trim();
+    if (!color) continue;
+    await prisma.productColorGroup.upsert({
+      where: { productId_color: { productId, color } },
+      create: {
+        productId,
+        color,
+        avitoColorValue: group.avitoColorValue?.trim() || color,
+        basePrice: Math.max(0, Math.round(group.basePrice ?? 0)),
+        defaultStockQty: Math.max(0, Math.round(group.defaultStockQty ?? 1)),
+        description: group.description ?? "",
+        avitoFieldsJson: JSON.stringify(group.avitoFields ?? {}),
+        sortOrder: group.sortOrder ?? index,
+      },
+      update: {
+        avitoColorValue: group.avitoColorValue?.trim() || color,
+        basePrice: Math.max(0, Math.round(group.basePrice ?? 0)),
+        defaultStockQty: Math.max(0, Math.round(group.defaultStockQty ?? 1)),
+        description: group.description ?? "",
+        avitoFieldsJson: JSON.stringify(group.avitoFields ?? {}),
+        sortOrder: group.sortOrder ?? index,
+      },
+    });
+  }
 }

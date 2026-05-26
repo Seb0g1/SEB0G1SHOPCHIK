@@ -29,9 +29,26 @@ type ProductRecord = {
     sku: string;
     price: number;
     stockQty: number;
+    avitoFieldsJson: string;
+    needsSync: boolean;
     avitoExternalId: string | null;
     publicationStatus: string;
+    lastPriceSyncAt: Date | null;
+    lastStockSyncAt: Date | null;
     sortOrder: number;
+  }>;
+  colorGroups: Array<{
+    id: string;
+    productId: string;
+    color: string;
+    avitoColorValue: string | null;
+    basePrice: number;
+    defaultStockQty: number;
+    description: string;
+    avitoFieldsJson: string;
+    sortOrder: number;
+    createdAt: Date;
+    updatedAt: Date;
   }>;
   photos: Array<{
     id: string;
@@ -66,7 +83,18 @@ export function toClientProduct(product: ProductRecord): ClientProduct {
     lastApiSyncAt: product.lastApiSyncAt?.toISOString() ?? null,
     createdAt: product.createdAt.toISOString(),
     updatedAt: product.updatedAt.toISOString(),
-    variants: product.variants.map((variant) => ({ ...variant })),
+    variants: product.variants.map((variant) => ({
+      ...variant,
+      avitoFields: parseJsonObject(variant.avitoFieldsJson),
+      lastPriceSyncAt: variant.lastPriceSyncAt?.toISOString() ?? null,
+      lastStockSyncAt: variant.lastStockSyncAt?.toISOString() ?? null,
+    })),
+    colorGroups: product.colorGroups.map((group) => ({
+      ...group,
+      avitoFields: parseJsonObject(group.avitoFieldsJson),
+      createdAt: group.createdAt.toISOString(),
+      updatedAt: group.updatedAt.toISOString(),
+    })),
     photos: product.photos.map((photo) => ({
       ...photo,
       createdAt: photo.createdAt.toISOString(),
@@ -88,6 +116,7 @@ export function toClientProduct(product: ProductRecord): ClientProduct {
 export function toClientSettings(settings: {
   clientId: string | null;
   clientSecretEncrypted: string | null;
+  avitoUserId?: string | null;
   sellerLocation: string | null;
   contactName: string | null;
   phone: string | null;
@@ -95,6 +124,9 @@ export function toClientSettings(settings: {
   address: string | null;
   publicFeedUrl: string | null;
   redirectUrl: string | null;
+  autoloadReportEmail?: string | null;
+  autoloadScheduleJson?: string | null;
+  capabilitiesJson?: string | null;
 } | null): ClientAvitoSettings {
   return {
     clientId: settings?.clientId ?? "",
@@ -106,6 +138,10 @@ export function toClientSettings(settings: {
     address: settings?.address ?? "Москва",
     publicFeedUrl: settings?.publicFeedUrl ?? defaultFeedUrl(),
     redirectUrl: settings?.redirectUrl ?? defaultRedirectUrl(),
+    avitoUserId: settings?.avitoUserId ?? process.env.AVITO_ACCOUNT_ID ?? "self",
+    autoloadReportEmail: settings?.autoloadReportEmail ?? settings?.email ?? "",
+    autoloadScheduleJson: settings?.autoloadScheduleJson ?? "[]",
+    capabilities: parseUnknownJsonObject(settings?.capabilitiesJson ?? "{}"),
   };
 }
 
@@ -125,6 +161,15 @@ export function parseJsonObject(value: string): Record<string, string> {
     return Object.fromEntries(
       Object.entries(parsed).map(([key, item]) => [key, item === null || item === undefined ? "" : String(item)]),
     );
+  } catch {
+    return {};
+  }
+}
+
+export function parseUnknownJsonObject(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return {};
   }

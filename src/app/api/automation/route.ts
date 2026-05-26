@@ -6,6 +6,10 @@ const schema = z.object({
   onlineEnabled: z.boolean().optional(),
   reviewsEnabled: z.boolean().optional(),
   draftsEnabled: z.boolean().optional(),
+  reviewAutoSendEnabled: z.boolean().optional(),
+  messagesEnabled: z.boolean().optional(),
+  messageAutoRepliesEnabled: z.boolean().optional(),
+  reportsEnabled: z.boolean().optional(),
 });
 
 export async function GET() {

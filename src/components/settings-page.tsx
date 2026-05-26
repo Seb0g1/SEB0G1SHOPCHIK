@@ -41,7 +41,8 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
     setBusy("test");
     setMessage("");
     try {
-      const payload = await requestJson<{ ok: boolean; status: string }>("/api/settings/avito", { method: "POST" });
+      const payload = await requestJson<{ ok: boolean; status: string; capabilities?: Record<string, unknown> }>("/api/settings/avito", { method: "POST" });
+      setSettings({ ...settings, capabilities: payload.capabilities ?? settings.capabilities });
       setMessage(`Avito API: ${payload.status}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось проверить API");
@@ -68,34 +69,43 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
           </>
         }
       />
-      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:p-6">
-        <section className="rounded-md border border-line bg-white p-5 shadow-panel">
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextField label="Client ID" value={settings.clientId} onChange={(clientId) => setSettings({ ...settings, clientId })} />
-            <TextField
-              label={settings.hasClientSecret ? "Client secret (заменить)" : "Client secret"}
-              type="password"
-              value={secretDraft}
-              onChange={setSecretDraft}
-            />
-            <TextField
-              label="Город"
-              value={settings.sellerLocation}
-              onChange={(sellerLocation) => setSettings({ ...settings, sellerLocation })}
-            />
-            <TextField label="Адрес" value={settings.address} onChange={(address) => setSettings({ ...settings, address })} />
-            <TextField
-              label="Контакт"
-              value={settings.contactName}
-              onChange={(contactName) => setSettings({ ...settings, contactName })}
-            />
-            <TextField label="Телефон" value={settings.phone} onChange={(phone) => setSettings({ ...settings, phone })} />
-            <TextField label="Email" value={settings.email} onChange={(email) => setSettings({ ...settings, email })} />
-            <TextField
-              label="Redirect URL"
-              value={settings.redirectUrl}
-              onChange={(redirectUrl) => setSettings({ ...settings, redirectUrl })}
-            />
+      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_380px] xl:p-6">
+        <section className="space-y-6 rounded-md border border-line bg-white p-5 shadow-panel">
+          <div>
+            <h2 className="font-semibold">Авторизация</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <TextField label="Client ID" value={settings.clientId} onChange={(clientId) => setSettings({ ...settings, clientId })} />
+              <TextField label={settings.hasClientSecret ? "Client secret (заменить)" : "Client secret"} type="password" value={secretDraft} onChange={setSecretDraft} />
+              <TextField label="Avito User ID / accountId" value={settings.avitoUserId} onChange={(avitoUserId) => setSettings({ ...settings, avitoUserId })} />
+              <TextField label="Redirect URL" value={settings.redirectUrl} onChange={(redirectUrl) => setSettings({ ...settings, redirectUrl })} />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="font-semibold">Контакты объявления</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <TextField label="Город" value={settings.sellerLocation} onChange={(sellerLocation) => setSettings({ ...settings, sellerLocation })} />
+              <TextField label="Адрес" value={settings.address} onChange={(address) => setSettings({ ...settings, address })} />
+              <TextField label="Контакт" value={settings.contactName} onChange={(contactName) => setSettings({ ...settings, contactName })} />
+              <TextField label="Телефон" value={settings.phone} onChange={(phone) => setSettings({ ...settings, phone })} />
+              <TextField label="Email" value={settings.email} onChange={(email) => setSettings({ ...settings, email })} />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="font-semibold">Autoload API</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <TextField label="Скрытый feed URL" value={settings.publicFeedUrl} onChange={(publicFeedUrl) => setSettings({ ...settings, publicFeedUrl })} />
+              <TextField label="Email отчетов" value={settings.autoloadReportEmail} onChange={(autoloadReportEmail) => setSettings({ ...settings, autoloadReportEmail })} />
+              <label className="block md:col-span-2">
+                <span className="mb-1 block text-xs font-semibold text-moss">Расписание Autoload JSON</span>
+                <textarea
+                  className="min-h-[110px] w-full rounded-md border-line font-mono text-sm"
+                  value={settings.autoloadScheduleJson}
+                  onChange={(event) => setSettings({ ...settings, autoloadScheduleJson: event.target.value })}
+                />
+              </label>
+            </div>
           </div>
         </section>
 
@@ -106,19 +116,16 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
               <h2 className="font-semibold">OAuth callback</h2>
             </div>
             <p className="mt-4 break-all rounded-md bg-canvas p-3 text-sm font-semibold">{settings.redirectUrl}</p>
-          </div>
-          <div className="rounded-md border border-line bg-white p-5 shadow-panel">
-            <h2 className="font-semibold">Публикация</h2>
-            <p className="mt-3 text-sm text-moss">
-              Товары отправляются через Avito API. Технические URL скрыты из рабочего интерфейса.
-            </p>
+            <p className="mt-3 text-sm leading-6 text-moss">Если Avito принял только корень домена, для OAuth лучше добавить точный callback выше.</p>
           </div>
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <h2 className="font-semibold">Capabilities</h2>
             <div className="mt-3 space-y-2 text-sm text-moss">
-              <CapabilityLine label="Отзывы" value={automation?.capabilities.reviews} />
-              <CapabilityLine label="Ответы" value={automation?.capabilities.reviewReplies} />
-              <CapabilityLine label="Online presence" value={automation?.capabilities.onlinePresence} />
+              <CapabilityLine label="Autoload" value={settings.capabilities.autoloadProfile ?? automation?.capabilities.autoloadProfile} />
+              <CapabilityLine label="Отзывы" value={settings.capabilities.reviews ?? automation?.capabilities.reviews} />
+              <CapabilityLine label="Ответы" value={settings.capabilities.reviewReplies ?? automation?.capabilities.reviewReplies} />
+              <CapabilityLine label="Messenger" value={settings.capabilities.messenger ?? automation?.capabilities.messenger} />
+              <CapabilityLine label="Online" value={settings.capabilities.onlinePresence ?? automation?.capabilities.onlinePresence} />
             </div>
             <Link className="mt-4 inline-flex text-sm font-semibold text-sea" href="/automation">
               Открыть автоматизацию

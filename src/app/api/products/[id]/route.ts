@@ -27,8 +27,24 @@ const updateProductSchema = z.object({
         size: z.string(),
         price: z.coerce.number().int().min(0),
         stockQty: z.coerce.number().int().min(0),
+        avitoFields: z.record(z.string(), z.string()).optional(),
+        needsSync: z.boolean().optional(),
         publicationStatus: z.string(),
         avitoExternalId: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
+  colorGroups: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        color: z.string(),
+        avitoColorValue: z.string().nullable().optional(),
+        basePrice: z.coerce.number().int().min(0),
+        defaultStockQty: z.coerce.number().int().min(0),
+        description: z.string().optional(),
+        avitoFields: z.record(z.string(), z.string()).optional(),
+        sortOrder: z.coerce.number().int().min(0).optional(),
       }),
     )
     .optional(),

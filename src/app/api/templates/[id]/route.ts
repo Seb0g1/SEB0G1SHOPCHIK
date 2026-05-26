@@ -10,6 +10,8 @@ const schema = z.object({
   text: z.string().min(1).optional(),
   priority: z.coerce.number().int().optional(),
   active: z.boolean().optional(),
+  autoSend: z.boolean().optional(),
+  kind: z.enum(["REVIEW", "MESSAGE"]).optional(),
 });
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {

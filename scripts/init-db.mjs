@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 const databasePath = resolveDatabasePath(process.env.DATABASE_URL || readEnvDatabaseUrl() || "file:./../data/dev.db");
@@ -40,12 +41,31 @@ CREATE TABLE IF NOT EXISTS "ProductVariant" (
   "sku" TEXT NOT NULL,
   "price" INTEGER NOT NULL,
   "stockQty" INTEGER NOT NULL DEFAULT 1,
+  "avitoFieldsJson" TEXT NOT NULL DEFAULT '{}',
+  "needsSync" BOOLEAN NOT NULL DEFAULT 0,
   "avitoExternalId" TEXT,
   "publicationStatus" TEXT NOT NULL DEFAULT 'DRAFT',
+  "lastPriceSyncAt" DATETIME,
+  "lastStockSyncAt" DATETIME,
   "sortOrder" INTEGER NOT NULL DEFAULT 0,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL,
   CONSTRAINT "ProductVariant_productId_fkey" FOREIGN KEY ("productId") REFERENCES "ProductTemplate" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "ProductColorGroup" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "productId" TEXT NOT NULL,
+  "color" TEXT NOT NULL,
+  "avitoColorValue" TEXT,
+  "basePrice" INTEGER NOT NULL DEFAULT 0,
+  "defaultStockQty" INTEGER NOT NULL DEFAULT 1,
+  "description" TEXT NOT NULL DEFAULT '',
+  "avitoFieldsJson" TEXT NOT NULL DEFAULT '{}',
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL,
+  CONSTRAINT "ProductColorGroup_productId_fkey" FOREIGN KEY ("productId") REFERENCES "ProductTemplate" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS "PhotoAsset" (
@@ -80,6 +100,7 @@ CREATE TABLE IF NOT EXISTS "AvitoSettings" (
   "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
   "clientId" TEXT,
   "clientSecretEncrypted" TEXT,
+  "avitoUserId" TEXT,
   "sellerLocation" TEXT,
   "contactName" TEXT,
   "phone" TEXT,
@@ -87,6 +108,9 @@ CREATE TABLE IF NOT EXISTS "AvitoSettings" (
   "address" TEXT,
   "publicFeedUrl" TEXT,
   "redirectUrl" TEXT,
+  "autoloadReportEmail" TEXT,
+  "autoloadScheduleJson" TEXT NOT NULL DEFAULT '[]',
+  "capabilitiesJson" TEXT NOT NULL DEFAULT '{}',
   "updatedAt" DATETIME NOT NULL
 );
 
@@ -121,6 +145,8 @@ CREATE TABLE IF NOT EXISTS "ReplyTemplate" (
   "text" TEXT NOT NULL,
   "priority" INTEGER NOT NULL DEFAULT 0,
   "active" BOOLEAN NOT NULL DEFAULT 1,
+  "autoSend" BOOLEAN NOT NULL DEFAULT 0,
+  "kind" TEXT NOT NULL DEFAULT 'REVIEW',
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL
 );
@@ -144,17 +170,109 @@ CREATE TABLE IF NOT EXISTS "AutomationState" (
   "onlineEnabled" BOOLEAN NOT NULL DEFAULT 0,
   "reviewsEnabled" BOOLEAN NOT NULL DEFAULT 1,
   "draftsEnabled" BOOLEAN NOT NULL DEFAULT 1,
+  "reviewAutoSendEnabled" BOOLEAN NOT NULL DEFAULT 1,
+  "messagesEnabled" BOOLEAN NOT NULL DEFAULT 0,
+  "messageAutoRepliesEnabled" BOOLEAN NOT NULL DEFAULT 0,
+  "reportsEnabled" BOOLEAN NOT NULL DEFAULT 1,
   "status" TEXT NOT NULL DEFAULT 'IDLE',
   "lastOnlinePingAt" DATETIME,
   "lastReviewsSyncAt" DATETIME,
+  "lastReviewAutoSendAt" DATETIME,
+  "lastMessagesSyncAt" DATETIME,
+  "lastMessageRulesAt" DATETIME,
+  "lastReportsSyncAt" DATETIME,
   "lastError" TEXT,
   "capabilitiesJson" TEXT NOT NULL DEFAULT '{}',
   "updatedAt" DATETIME NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "BulkPriceOperation" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "scope" TEXT NOT NULL DEFAULT 'PRODUCT',
+  "filterJson" TEXT NOT NULL DEFAULT '{}',
+  "mode" TEXT NOT NULL,
+  "value" REAL NOT NULL,
+  "rounding" TEXT NOT NULL DEFAULT 'NONE',
+  "previewCount" INTEGER NOT NULL DEFAULT 0,
+  "appliedCount" INTEGER NOT NULL DEFAULT 0,
+  "status" TEXT NOT NULL DEFAULT 'PREVIEW',
+  "errorsJson" TEXT NOT NULL DEFAULT '[]',
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "MessageChat" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "avitoChatId" TEXT NOT NULL,
+  "title" TEXT,
+  "buyerName" TEXT,
+  "itemId" TEXT,
+  "itemTitle" TEXT,
+  "unreadCount" INTEGER NOT NULL DEFAULT 0,
+  "lastMessageAt" DATETIME,
+  "rawJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "Message" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "avitoMessageId" TEXT NOT NULL,
+  "direction" TEXT NOT NULL,
+  "text" TEXT NOT NULL,
+  "authorName" TEXT,
+  "sentAt" DATETIME,
+  "rawJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL,
+  CONSTRAINT "Message_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "MessageChat" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "MessageRule" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "keywords" TEXT NOT NULL DEFAULT '',
+  "responseText" TEXT NOT NULL,
+  "priority" INTEGER NOT NULL DEFAULT 0,
+  "cooldownSeconds" INTEGER NOT NULL DEFAULT 900,
+  "oncePerChat" BOOLEAN NOT NULL DEFAULT 1,
+  "active" BOOLEAN NOT NULL DEFAULT 1,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "MessageReplyLog" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "messageId" TEXT,
+  "ruleId" TEXT,
+  "text" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "sentAt" DATETIME,
+  "error" TEXT,
+  "rawJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL,
+  CONSTRAINT "MessageReplyLog_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "MessageChat" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "MessageReplyLog_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "Message" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT "MessageReplyLog_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "MessageRule" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "AutomationEvent" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "task" TEXT NOT NULL,
+  "status" TEXT NOT NULL,
+  "message" TEXT,
+  "payloadJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS "ProductVariant_sku_key" ON "ProductVariant"("sku");
 CREATE INDEX IF NOT EXISTS "ProductVariant_productId_color_idx" ON "ProductVariant"("productId", "color");
 CREATE UNIQUE INDEX IF NOT EXISTS "ProductVariant_productId_color_size_key" ON "ProductVariant"("productId", "color", "size");
+CREATE UNIQUE INDEX IF NOT EXISTS "ProductColorGroup_productId_color_key" ON "ProductColorGroup"("productId", "color");
+CREATE INDEX IF NOT EXISTS "ProductColorGroup_productId_sortOrder_idx" ON "ProductColorGroup"("productId", "sortOrder");
 CREATE INDEX IF NOT EXISTS "PhotoAsset_productId_color_idx" ON "PhotoAsset"("productId", "color");
 CREATE UNIQUE INDEX IF NOT EXISTS "Review_avitoReviewId_key" ON "Review"("avitoReviewId");
 CREATE INDEX IF NOT EXISTS "Review_rating_status_idx" ON "Review"("rating", "status");
@@ -162,7 +280,17 @@ CREATE INDEX IF NOT EXISTS "Review_avitoCreatedAt_idx" ON "Review"("avitoCreated
 CREATE UNIQUE INDEX IF NOT EXISTS "ReviewReplyDraft_reviewId_key" ON "ReviewReplyDraft"("reviewId");
 CREATE INDEX IF NOT EXISTS "ReviewReplyDraft_status_idx" ON "ReviewReplyDraft"("status");
 CREATE INDEX IF NOT EXISTS "ReviewReplyDraft_templateId_idx" ON "ReviewReplyDraft"("templateId");
-CREATE INDEX IF NOT EXISTS "ReplyTemplate_active_priority_idx" ON "ReplyTemplate"("active", "priority");
+CREATE UNIQUE INDEX IF NOT EXISTS "MessageChat_avitoChatId_key" ON "MessageChat"("avitoChatId");
+CREATE INDEX IF NOT EXISTS "MessageChat_lastMessageAt_idx" ON "MessageChat"("lastMessageAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "Message_avitoMessageId_key" ON "Message"("avitoMessageId");
+CREATE INDEX IF NOT EXISTS "Message_chatId_sentAt_idx" ON "Message"("chatId", "sentAt");
+CREATE INDEX IF NOT EXISTS "Message_direction_idx" ON "Message"("direction");
+CREATE INDEX IF NOT EXISTS "MessageRule_active_priority_idx" ON "MessageRule"("active", "priority");
+CREATE INDEX IF NOT EXISTS "MessageReplyLog_chatId_status_idx" ON "MessageReplyLog"("chatId", "status");
+CREATE INDEX IF NOT EXISTS "MessageReplyLog_messageId_idx" ON "MessageReplyLog"("messageId");
+CREATE INDEX IF NOT EXISTS "MessageReplyLog_ruleId_idx" ON "MessageReplyLog"("ruleId");
+CREATE INDEX IF NOT EXISTS "AutomationEvent_task_createdAt_idx" ON "AutomationEvent"("task", "createdAt");
+CREATE INDEX IF NOT EXISTS "AutomationEvent_status_idx" ON "AutomationEvent"("status");
 `);
 
 addColumnIfMissing(db, "ProductTemplate", "avitoCategorySlug", '"avitoCategorySlug" TEXT');
@@ -170,8 +298,28 @@ addColumnIfMissing(db, "ProductTemplate", "avitoCategoryName", '"avitoCategoryNa
 addColumnIfMissing(db, "ProductTemplate", "avitoFieldsJson", `"avitoFieldsJson" TEXT NOT NULL DEFAULT '{}'`);
 addColumnIfMissing(db, "ProductTemplate", "publicationErrorsJson", `"publicationErrorsJson" TEXT NOT NULL DEFAULT '[]'`);
 addColumnIfMissing(db, "ProductTemplate", "lastApiSyncAt", '"lastApiSyncAt" DATETIME');
+addColumnIfMissing(db, "ProductVariant", "avitoFieldsJson", `"avitoFieldsJson" TEXT NOT NULL DEFAULT '{}'`);
+addColumnIfMissing(db, "ProductVariant", "needsSync", '"needsSync" BOOLEAN NOT NULL DEFAULT 0');
+addColumnIfMissing(db, "ProductVariant", "lastPriceSyncAt", '"lastPriceSyncAt" DATETIME');
+addColumnIfMissing(db, "ProductVariant", "lastStockSyncAt", '"lastStockSyncAt" DATETIME');
+addColumnIfMissing(db, "AvitoSettings", "avitoUserId", '"avitoUserId" TEXT');
+addColumnIfMissing(db, "AvitoSettings", "autoloadReportEmail", '"autoloadReportEmail" TEXT');
+addColumnIfMissing(db, "AvitoSettings", "autoloadScheduleJson", `"autoloadScheduleJson" TEXT NOT NULL DEFAULT '[]'`);
+addColumnIfMissing(db, "AvitoSettings", "capabilitiesJson", `"capabilitiesJson" TEXT NOT NULL DEFAULT '{}'`);
+addColumnIfMissing(db, "ReplyTemplate", "autoSend", '"autoSend" BOOLEAN NOT NULL DEFAULT 0');
+addColumnIfMissing(db, "ReplyTemplate", "kind", `"kind" TEXT NOT NULL DEFAULT 'REVIEW'`);
+db.exec('CREATE INDEX IF NOT EXISTS "ReplyTemplate_kind_active_priority_idx" ON "ReplyTemplate"("kind", "active", "priority")');
+addColumnIfMissing(db, "AutomationState", "reviewAutoSendEnabled", '"reviewAutoSendEnabled" BOOLEAN NOT NULL DEFAULT 1');
+addColumnIfMissing(db, "AutomationState", "messagesEnabled", '"messagesEnabled" BOOLEAN NOT NULL DEFAULT 0');
+addColumnIfMissing(db, "AutomationState", "messageAutoRepliesEnabled", '"messageAutoRepliesEnabled" BOOLEAN NOT NULL DEFAULT 0');
+addColumnIfMissing(db, "AutomationState", "reportsEnabled", '"reportsEnabled" BOOLEAN NOT NULL DEFAULT 1');
+addColumnIfMissing(db, "AutomationState", "lastReviewAutoSendAt", '"lastReviewAutoSendAt" DATETIME');
+addColumnIfMissing(db, "AutomationState", "lastMessagesSyncAt", '"lastMessagesSyncAt" DATETIME');
+addColumnIfMissing(db, "AutomationState", "lastMessageRulesAt", '"lastMessageRulesAt" DATETIME');
+addColumnIfMissing(db, "AutomationState", "lastReportsSyncAt", '"lastReportsSyncAt" DATETIME');
 
 seedDefaultReplyTemplates(db);
+backfillColorGroups(db);
 ensureAutomationState(db);
 
 db.close();
@@ -212,14 +360,49 @@ function addColumnIfMissing(database, table, column, definition) {
   database.exec(`ALTER TABLE "${table}" ADD COLUMN ${definition}`);
 }
 
+function backfillColorGroups(database) {
+  const rows = database
+    .prepare(
+      `SELECT
+        v."productId" AS productId,
+        v."color" AS color,
+        MIN(v."price") AS basePrice,
+        MAX(v."stockQty") AS stockQty,
+        MIN(v."sortOrder") AS sortOrder
+      FROM "ProductVariant" v
+      WHERE TRIM(v."color") <> ''
+      GROUP BY v."productId", v."color"`,
+    )
+    .all();
+
+  const insert = database.prepare(`
+    INSERT OR IGNORE INTO "ProductColorGroup" (
+      "id", "productId", "color", "avitoColorValue", "basePrice", "defaultStockQty",
+      "description", "avitoFieldsJson", "sortOrder", "createdAt", "updatedAt"
+    ) VALUES (?, ?, ?, ?, ?, ?, '', '{}', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `);
+
+  for (const row of rows) {
+    insert.run(
+      `cg_${randomUUID().replaceAll("-", "")}`,
+      row.productId,
+      row.color,
+      row.color,
+      Number(row.basePrice || 0),
+      Number(row.stockQty || 1),
+      Number(row.sortOrder || 0),
+    );
+  }
+}
+
 function seedDefaultReplyTemplates(database) {
   const count = database.prepare('SELECT COUNT(*) AS count FROM "ReplyTemplate"').get().count;
   if (count > 0) return;
 
   const insert = database.prepare(`
     INSERT INTO "ReplyTemplate" (
-      "id", "name", "ratingMin", "ratingMax", "keywords", "text", "priority", "active", "createdAt", "updatedAt"
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      "id", "name", "ratingMin", "ratingMax", "keywords", "text", "priority", "active", "autoSend", "kind", "createdAt", "updatedAt"
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, 'REVIEW', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `);
 
   const defaults = [
@@ -270,8 +453,9 @@ function ensureAutomationState(database) {
   database
     .prepare(
       `INSERT OR IGNORE INTO "AutomationState" (
-        "id", "onlineEnabled", "reviewsEnabled", "draftsEnabled", "status", "capabilitiesJson", "updatedAt"
-      ) VALUES ('default', 0, 1, 1, 'IDLE', '{}', CURRENT_TIMESTAMP)`,
+        "id", "onlineEnabled", "reviewsEnabled", "draftsEnabled", "reviewAutoSendEnabled", "messagesEnabled",
+        "messageAutoRepliesEnabled", "reportsEnabled", "status", "capabilitiesJson", "updatedAt"
+      ) VALUES ('default', 0, 1, 1, 1, 0, 0, 1, 'IDLE', '{}', CURRENT_TIMESTAMP)`,
     )
     .run();
 }

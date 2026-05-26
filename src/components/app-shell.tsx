@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, FileText, MessageSquareText, Package, Settings, UploadCloud } from "lucide-react";
+import { Activity, BarChart3, FileText, MessageCircle, MessageSquareText, Package, Settings, UploadCloud } from "lucide-react";
 import clsx from "clsx";
 import type { ReactNode } from "react";
 
@@ -11,7 +11,9 @@ const nav = [
   { href: "/products/new", label: "Новый товар", icon: UploadCloud },
   { href: "/publications", label: "Публикации", icon: BarChart3 },
   { href: "/reviews", label: "Отзывы", icon: MessageSquareText },
-  { href: "/templates", label: "Шаблоны", icon: FileText },
+  { href: "/messages", label: "Сообщения", icon: MessageCircle },
+  { href: "/message-rules", label: "Правила чата", icon: FileText },
+  { href: "/templates", label: "Шаблоны отзывов", icon: FileText },
   { href: "/automation", label: "Автоматизация", icon: Activity },
   { href: "/settings", label: "Настройки", icon: Settings },
 ];

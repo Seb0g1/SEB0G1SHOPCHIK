@@ -38,4 +38,52 @@ describe("avito catalog normalization", () => {
     });
     expect(normalizeValues({ a: "S", b: "M" })).toEqual(["S", "M"]);
   });
+
+  it("normalizes Avito content blocks, children and value links", () => {
+    const fields = normalizeFields({
+      fields: [
+        {
+          tag: "GoodsType",
+          label: "Тип товара",
+          content: [
+            {
+              field_type: "select",
+              data_type: "string",
+              required: true,
+              values: [{ value: "Одежда" }],
+              values_link_json: "https://api.avito.ru/values",
+              dependencies_text: ["depends on Category"],
+            },
+          ],
+          children: [
+            {
+              tag: "Size",
+              label: "Размер",
+              content: [{ field_type: "checkbox", data_type: "string", required: false, values: [{ value: "M" }] }],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "GoodsType",
+          label: "Тип товара",
+          type: "select",
+          required: true,
+          values: ["Одежда"],
+          valuesLinkJson: "https://api.avito.ru/values",
+          help: "depends on Category",
+        }),
+        expect.objectContaining({
+          key: "Size",
+          label: "Размер",
+          type: "select",
+          values: ["M"],
+        }),
+      ]),
+    );
+  });
 });

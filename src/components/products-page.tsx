@@ -4,26 +4,30 @@ import Link from "next/link";
 import { Filter, PackagePlus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ClientProduct } from "@/lib/client-types";
-import { Button, EmptyState, PageHeader, StatusPill, formatMoney } from "@/components/ui-kit";
+import { Button, EmptyState, PageHeader, SelectField, StatusPill, formatMoney, requestJson } from "@/components/ui-kit";
 
 const filters = [
   { id: "all", label: "Все" },
   { id: "DRAFT", label: "Черновики" },
   { id: "ERROR", label: "Ошибки" },
   { id: "READY", label: "Готовые" },
+  { id: "READY_FOR_API", label: "Готовы к API" },
   { id: "no-photo", label: "Нет фото" },
   { id: "no-category", label: "Нет категории" },
 ];
 
 export function ProductsPage({ products }: { products: ClientProduct[] }) {
+  const [items, setItems] = useState(products);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [bulk, setBulk] = useState({ color: "", mode: "SET", value: 0, rounding: "NONE" });
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
 
+  const colors = useMemo(() => [...new Set(items.flatMap((product) => product.variants.map((variant) => variant.color)).filter(Boolean))], [items]);
   const filtered = useMemo(() => {
-    return products.filter((product) => {
-      const matchesQuery = `${product.title} ${product.brand ?? ""} ${product.avitoCategoryName ?? ""}`
-        .toLowerCase()
-        .includes(query.toLowerCase());
+    return items.filter((product) => {
+      const matchesQuery = `${product.title} ${product.brand ?? ""} ${product.avitoCategoryName ?? ""}`.toLowerCase().includes(query.toLowerCase());
       const matchesFilter =
         filter === "all" ||
         product.status === filter ||
@@ -31,14 +35,35 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
         (filter === "no-category" && !product.avitoCategorySlug);
       return matchesQuery && matchesFilter;
     });
-  }, [products, query, filter]);
+  }, [items, query, filter]);
 
-  const totalVariants = products.reduce((sum, product) => sum + product.variants.length, 0);
-  const activeVariants = products.reduce(
-    (sum, product) => sum + product.variants.filter((variant) => variant.stockQty > 0).length,
-    0,
-  );
-  const errors = products.filter((product) => product.status === "ERROR").length;
+  const totalVariants = items.reduce((sum, product) => sum + product.variants.length, 0);
+  const activeVariants = items.reduce((sum, product) => sum + product.variants.filter((variant) => variant.stockQty > 0).length, 0);
+  const needsSync = items.reduce((sum, product) => sum + product.variants.filter((variant) => variant.needsSync).length, 0);
+
+  async function applyBulkPrice() {
+    setBusy(true);
+    setNotice("");
+    try {
+      const result = await requestJson<{ preview: { count: number } }>("/api/bulk-price/apply", {
+        method: "POST",
+        body: JSON.stringify({
+          productIds: filtered.map((product) => product.id),
+          colors: bulk.color ? [bulk.color] : undefined,
+          mode: bulk.mode,
+          value: bulk.value,
+          rounding: bulk.rounding,
+        }),
+      });
+      const payload = await requestJson<{ products: ClientProduct[] }>("/api/products");
+      setItems(payload.products);
+      setNotice(`Цены обновлены: ${result.preview.count} вариантов.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Не удалось обновить цены");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <>
@@ -55,10 +80,11 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
         }
       />
       <div className="space-y-4 p-4 xl:p-6">
-        <div className="grid gap-3 md:grid-cols-3">
-          <Metric label="Товаров" value={products.length} />
+        <div className="grid gap-3 md:grid-cols-4">
+          <Metric label="Товаров" value={items.length} />
           <Metric label="Активных вариантов" value={activeVariants} hint={`${totalVariants} всего`} />
-          <Metric label="Требуют внимания" value={errors} />
+          <Metric label="К синхронизации" value={needsSync} />
+          <Metric label="Ошибки" value={items.filter((product) => product.status === "ERROR").length} />
         </div>
 
         <div className="flex flex-col gap-3 rounded-md border border-line bg-white p-3 shadow-panel lg:flex-row lg:items-center lg:justify-between">
@@ -75,9 +101,7 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
             {filters.map((item) => (
               <button
                 key={item.id}
-                className={`h-10 rounded-md px-3 text-sm font-semibold ${
-                  filter === item.id ? "bg-ink text-white" : "border border-line bg-white text-ink hover:bg-canvas"
-                }`}
+                className={`h-10 rounded-md px-3 text-sm font-semibold ${filter === item.id ? "bg-ink text-white" : "border border-line bg-white text-ink hover:bg-canvas"}`}
                 type="button"
                 onClick={() => setFilter(item.id)}
               >
@@ -86,6 +110,24 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
             ))}
           </div>
         </div>
+
+        <section className="grid gap-3 rounded-md border border-line bg-white p-4 shadow-panel md:grid-cols-5">
+          <SelectField label="Цвет" value={bulk.color} options={["", ...colors]} onChange={(color) => setBulk({ ...bulk, color })} />
+          <SelectField label="Операция" value={bulk.mode} options={["SET", "ADD", "PERCENT"]} onChange={(mode) => setBulk({ ...bulk, mode })} />
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold text-moss">Значение</span>
+            <input className="h-10 w-full rounded-md border-line bg-white text-sm" type="number" value={bulk.value} onChange={(event) => setBulk({ ...bulk, value: Number(event.target.value) })} />
+          </label>
+          <SelectField label="Округление" value={bulk.rounding} options={["NONE", "TO_9", "TO_99"]} onChange={(rounding) => setBulk({ ...bulk, rounding })} />
+          <div className="flex items-end">
+            <Button className="w-full" busy={busy} disabled={!filtered.length} onClick={applyBulkPrice}>
+              Массово изменить
+            </Button>
+          </div>
+          <p className="text-sm text-moss md:col-span-5">Операция применяется к текущей выдаче каталога. Можно выбрать цвет, например белый или черный, и изменить цену у всех размеров.</p>
+        </section>
+
+        {notice ? <p className="rounded-md border border-line bg-white p-3 text-sm font-semibold text-moss">{notice}</p> : null}
 
         {filtered.length ? (
           <div className="overflow-hidden rounded-md border border-line bg-white shadow-panel">
@@ -98,18 +140,12 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
             </div>
             <div className="divide-y divide-line">
               {filtered.map((product) => (
-                <Link
-                  key={product.id}
-                  className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.5fr_1fr_.6fr_.6fr_.7fr] lg:items-center"
-                  href={`/products/${product.id}`}
-                >
+                <Link key={product.id} className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.5fr_1fr_.6fr_.6fr_.7fr] lg:items-center" href={`/products/${product.id}`}>
                   <div className="flex min-w-0 items-center gap-3">
                     <ProductThumb product={product} />
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{product.title}</p>
-                      <p className="mt-1 text-sm text-moss">
-                        {product.brand || "Без бренда"} · {formatMoney(product.basePrice)} ₽
-                      </p>
+                      <p className="mt-1 text-sm text-moss">{product.brand || "Без бренда"} · {formatMoney(product.basePrice)} ₽</p>
                     </div>
                   </div>
                   <p className="text-sm text-moss">{product.avitoCategoryName || product.productType || "Категория не выбрана"}</p>

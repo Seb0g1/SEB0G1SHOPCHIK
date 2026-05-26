@@ -30,7 +30,26 @@ model ProductTemplate {
   updatedAt             DateTime         @updatedAt
   variants              ProductVariant[]
   photos                PhotoAsset[]
+  colorGroups           ProductColorGroup[]
   publicationRuns       PublicationRun[]
+}
+
+model ProductColorGroup {
+  id              String          @id @default(cuid())
+  productId       String
+  product         ProductTemplate @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color           String
+  avitoColorValue String?
+  basePrice       Int             @default(0)
+  defaultStockQty Int             @default(1)
+  description     String          @default("")
+  avitoFieldsJson String          @default("{}")
+  sortOrder       Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([productId, color])
+  @@index([productId, sortOrder])
 }
 
 model ProductVariant {
@@ -42,14 +61,33 @@ model ProductVariant {
   sku               String          @unique
   price             Int
   stockQty          Int             @default(1)
+  avitoFieldsJson   String          @default("{}")
+  needsSync         Boolean         @default(false)
   avitoExternalId   String?
   publicationStatus String          @default("DRAFT")
+  lastPriceSyncAt   DateTime?
+  lastStockSyncAt   DateTime?
   sortOrder         Int             @default(0)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
   @@unique([productId, color, size])
   @@index([productId, color])
+}
+
+model BulkPriceOperation {
+  id           String   @id @default(cuid())
+  scope        String   @default("PRODUCT")
+  filterJson   String   @default("{}")
+  mode         String
+  value        Float
+  rounding     String   @default("NONE")
+  previewCount Int      @default(0)
+  appliedCount Int      @default(0)
+  status       String   @default("PREVIEW")
+  errorsJson   String   @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model PhotoAsset {
@@ -86,6 +124,7 @@ model AvitoSettings {
   id                    String   @id @default("default")
   clientId              String?
   clientSecretEncrypted String?
+  avitoUserId           String?
   sellerLocation        String?
   contactName           String?
   phone                 String?
@@ -93,6 +132,9 @@ model AvitoSettings {
   address               String?
   publicFeedUrl         String?
   redirectUrl           String?
+  autoloadReportEmail   String?
+  autoloadScheduleJson  String   @default("[]")
+  capabilitiesJson      String   @default("{}")
   updatedAt             DateTime @updatedAt
 }
 
@@ -148,11 +190,13 @@ model ReplyTemplate {
   text      String
   priority  Int                @default(0)
   active    Boolean            @default(true)
+  autoSend  Boolean            @default(false)
+  kind      String             @default("REVIEW")
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   drafts    ReviewReplyDraft[]
 
-  @@index([active, priority])
+  @@index([kind, active, priority])
 }
 
 model AutomationState {
@@ -160,10 +204,103 @@ model AutomationState {
   onlineEnabled      Boolean   @default(false)
   reviewsEnabled     Boolean   @default(true)
   draftsEnabled      Boolean   @default(true)
+  reviewAutoSendEnabled Boolean @default(true)
+  messagesEnabled    Boolean   @default(false)
+  messageAutoRepliesEnabled Boolean @default(false)
+  reportsEnabled     Boolean   @default(true)
   status             String    @default("IDLE")
   lastOnlinePingAt   DateTime?
   lastReviewsSyncAt  DateTime?
+  lastReviewAutoSendAt DateTime?
+  lastMessagesSyncAt DateTime?
+  lastMessageRulesAt DateTime?
+  lastReportsSyncAt DateTime?
   lastError          String?
   capabilitiesJson   String    @default("{}")
   updatedAt          DateTime  @updatedAt
+}
+
+model MessageChat {
+  id            String            @id @default(cuid())
+  avitoChatId   String            @unique
+  title         String?
+  buyerName     String?
+  itemId        String?
+  itemTitle     String?
+  unreadCount   Int               @default(0)
+  lastMessageAt DateTime?
+  rawJson       String            @default("{}")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  messages      Message[]
+  replyLogs     MessageReplyLog[]
+
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String            @id @default(cuid())
+  chatId         String
+  chat           MessageChat       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  avitoMessageId String            @unique
+  direction      String
+  text           String
+  authorName     String?
+  sentAt         DateTime?
+  rawJson        String            @default("{}")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  replyLogs      MessageReplyLog[]
+
+  @@index([chatId, sentAt])
+  @@index([direction])
+}
+
+model MessageRule {
+  id              String            @id @default(cuid())
+  name            String
+  keywords        String            @default("")
+  responseText    String
+  priority        Int               @default(0)
+  cooldownSeconds Int               @default(900)
+  oncePerChat     Boolean           @default(true)
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  replyLogs       MessageReplyLog[]
+
+  @@index([active, priority])
+}
+
+model MessageReplyLog {
+  id        String       @id @default(cuid())
+  chatId    String
+  chat      MessageChat  @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  messageId String?
+  message   Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  ruleId    String?
+  rule      MessageRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  text      String
+  status    String       @default("PENDING")
+  sentAt    DateTime?
+  error     String?
+  rawJson   String       @default("{}")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([chatId, status])
+  @@index([messageId])
+  @@index([ruleId])
+}
+
+model AutomationEvent {
+  id          String   @id @default(cuid())
+  task        String
+  status      String
+  message     String?
+  payloadJson String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([task, createdAt])
+  @@index([status])
 }

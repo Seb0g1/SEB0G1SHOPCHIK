@@ -170,20 +170,30 @@ export function normalizeFields(payload: unknown): AvitoCatalogField[] {
     : payload && typeof payload === "object"
       ? unwrapNodes((payload as Record<string, unknown>).fields ?? (payload as Record<string, unknown>).items ?? payload)
       : [];
-  return fields.map(normalizeField).filter(Boolean) as AvitoCatalogField[];
+  return fields.flatMap((field) => normalizeFieldTree(field)).filter(Boolean) as AvitoCatalogField[];
+}
+
+function normalizeFieldTree(payload: unknown): AvitoCatalogField[] {
+  const own = normalizeField(payload);
+  const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+  const children = unwrapNodes(record.children ?? record.childs ?? [])
+    .flatMap((child) => normalizeFieldTree(child))
+    .filter(Boolean);
+  return own ? [own, ...children] : children;
 }
 
 function normalizeField(payload: unknown): AvitoCatalogField | null {
   if (!payload || typeof payload !== "object") return null;
   const record = payload as Record<string, unknown>;
-  const key = stringValue(record.slug ?? record.name ?? record.id ?? record.code ?? record.xml_name ?? record.field);
-  const label = stringValue(record.title ?? record.label ?? record.name ?? record.description ?? key);
+  const content = normalizeContent(record.content);
+  const key = stringValue(record.tag ?? record.slug ?? record.name ?? record.id ?? record.code ?? record.xml_name ?? record.field);
+  const label = stringValue(record.label ?? record.title ?? record.name ?? record.descriptions ?? record.description ?? key);
   if (!key || !label) return null;
-  const values = normalizeValues(record.values ?? record.options ?? record.variants ?? record.enum);
-  const rawType = stringValue(record.type ?? record.field_type ?? record.data_type).toLowerCase();
+  const values = normalizeValues(content.values ?? record.values ?? record.options ?? record.variants ?? record.enum);
+  const rawType = stringValue(content.field_type ?? content.data_type ?? record.type ?? record.field_type ?? record.data_type).toLowerCase();
   const type = values.length
     ? "select"
-    : rawType.includes("number") || rawType.includes("int")
+    : rawType.includes("number") || rawType.includes("int") || rawType.includes("float")
       ? "number"
       : rawType.includes("bool")
         ? "boolean"
@@ -194,11 +204,36 @@ function normalizeField(payload: unknown): AvitoCatalogField | null {
     key,
     label,
     type,
-    required: Boolean(record.required ?? record.is_required ?? record.isRequired),
+    required: Boolean(content.required ?? record.required ?? record.is_required ?? record.isRequired),
     values,
-    valuesLinkJson: stringValue(record.values_link_json ?? record.valuesLinkJson) || undefined,
-    help: stringValue(record.help ?? record.hint ?? record.description) || undefined,
+    valuesLinkJson: stringValue(content.values_link_json ?? record.values_link_json ?? record.valuesLinkJson) || undefined,
+    help:
+      [
+        stringValue(record.descriptions ?? record.help ?? record.hint ?? record.description),
+        normalizeDependencyText(content.dependencies_text),
+      ]
+        .filter(Boolean)
+        .join("\n") || undefined,
   };
+}
+
+function normalizeContent(payload: unknown): Record<string, unknown> {
+  if (Array.isArray(payload)) {
+    const visible = payload.find((item) => {
+      if (!item || typeof item !== "object") return false;
+      const record = item as Record<string, unknown>;
+      return !Array.isArray(record.dependencies) || record.dependencies.length === 0;
+    });
+    return (visible && typeof visible === "object" ? visible : payload[0] && typeof payload[0] === "object" ? payload[0] : {}) as Record<
+      string,
+      unknown
+    >;
+  }
+  return payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+}
+
+function normalizeDependencyText(payload: unknown): string {
+  return Array.isArray(payload) ? payload.map(stringValue).filter(Boolean).join("; ") : "";
 }
 
 export function normalizeValues(payload: unknown): string[] {
@@ -207,7 +242,12 @@ export function normalizeValues(payload: unknown): string[] {
     return payload
       .map((item) =>
         typeof item === "object" && item
-          ? stringValue((item as Record<string, unknown>).name ?? (item as Record<string, unknown>).title ?? item)
+          ? stringValue(
+              (item as Record<string, unknown>).value ??
+                (item as Record<string, unknown>).name ??
+                (item as Record<string, unknown>).title ??
+                item,
+            )
           : stringValue(item),
       )
       .filter(Boolean);

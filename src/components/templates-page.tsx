@@ -3,11 +3,11 @@
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { ClientReplyTemplate } from "@/lib/client-types";
-import { Button, NumberField, PageHeader, TextField, requestJson } from "@/components/ui-kit";
+import { Button, NumberField, PageHeader, SelectField, TextField, requestJson } from "@/components/ui-kit";
 
 type TemplateDraft = Pick<
   ClientReplyTemplate,
-  "name" | "ratingMin" | "ratingMax" | "keywords" | "text" | "priority" | "active"
+  "name" | "ratingMin" | "ratingMax" | "keywords" | "text" | "priority" | "active" | "autoSend" | "kind"
 >;
 
 const emptyTemplate: TemplateDraft = {
@@ -18,6 +18,8 @@ const emptyTemplate: TemplateDraft = {
   text: "Спасибо, {name}! Будем рады видеть вас снова в {shopName}.",
   priority: 60,
   active: true,
+  autoSend: false,
+  kind: "REVIEW",
 };
 
 export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientReplyTemplate[] }) {
@@ -78,9 +80,16 @@ export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientRe
     }
   }
 
+  function setDraft(id: string, patch: Partial<TemplateDraft>) {
+    setDrafts((current) => ({
+      ...current,
+      [id]: { ...(current[id] ?? emptyTemplate), ...patch },
+    }));
+  }
+
   return (
     <>
-      <PageHeader eyebrow="Онлайн и отзывы" title="Шаблоны ответов" />
+      <PageHeader eyebrow="Отзывы" title="Шаблоны ответов" />
       <div className="space-y-4 p-4 xl:p-6">
         <section className="rounded-md border border-line bg-white p-5 shadow-panel">
           <div className="mb-4">
@@ -89,24 +98,20 @@ export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientRe
               Переменные: {"{name}"}, {"{rating}"}, {"{itemTitle}"}, {"{brand}"}, {"{shopName}"}.
             </p>
           </div>
-          <div className="grid gap-4 lg:grid-cols-4">
+
+          <div className="grid gap-4 lg:grid-cols-5">
             <TextField label="Название" value={newTemplate.name} onChange={(name) => setNewTemplate({ ...newTemplate, name })} />
-            <NumberField
-              label="Рейтинг от"
-              value={newTemplate.ratingMin}
-              onChange={(ratingMin) => setNewTemplate({ ...newTemplate, ratingMin })}
-            />
-            <NumberField
-              label="Рейтинг до"
-              value={newTemplate.ratingMax}
-              onChange={(ratingMax) => setNewTemplate({ ...newTemplate, ratingMax })}
-            />
-            <NumberField
-              label="Приоритет"
-              value={newTemplate.priority}
-              onChange={(priority) => setNewTemplate({ ...newTemplate, priority })}
+            <NumberField label="Рейтинг от" value={newTemplate.ratingMin} onChange={(ratingMin) => setNewTemplate({ ...newTemplate, ratingMin })} />
+            <NumberField label="Рейтинг до" value={newTemplate.ratingMax} onChange={(ratingMax) => setNewTemplate({ ...newTemplate, ratingMax })} />
+            <NumberField label="Приоритет" value={newTemplate.priority} onChange={(priority) => setNewTemplate({ ...newTemplate, priority })} />
+            <SelectField
+              label="Тип"
+              value={newTemplate.kind}
+              options={["REVIEW", "MESSAGE"]}
+              onChange={(kind) => setNewTemplate({ ...newTemplate, kind: kind as TemplateDraft["kind"] })}
             />
           </div>
+
           <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
             <TextField
               label="Ключевые слова"
@@ -123,16 +128,20 @@ export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientRe
               />
             </label>
           </div>
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <label className="inline-flex items-center gap-2 text-sm font-semibold text-moss">
-              <input
-                className="rounded border-line text-sea"
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-4">
+              <Checkbox
                 checked={newTemplate.active}
-                type="checkbox"
-                onChange={(event) => setNewTemplate({ ...newTemplate, active: event.target.checked })}
+                label="Активный шаблон"
+                onChange={(active) => setNewTemplate({ ...newTemplate, active })}
               />
-              Активный шаблон
-            </label>
+              <Checkbox
+                checked={newTemplate.autoSend}
+                label="Автоотправка для отзывов"
+                onChange={(autoSend) => setNewTemplate({ ...newTemplate, autoSend })}
+              />
+            </div>
             <Button busy={busy === "create"} disabled={!newTemplate.name.trim() || !newTemplate.text.trim()} onClick={create}>
               <Plus className="h-4 w-4" />
               Добавить
@@ -151,7 +160,7 @@ export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientRe
                   <div>
                     <h2 className="font-semibold">{template.name}</h2>
                     <p className="mt-1 text-sm text-moss">
-                      {template.ratingMin}-{template.ratingMax}★ · приоритет {template.priority}
+                      {template.kind} · {template.ratingMin}-{template.ratingMax}★ · приоритет {template.priority}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -165,18 +174,22 @@ export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientRe
                     </Button>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-4 lg:grid-cols-4">
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-5">
                   <TextField label="Название" value={draft.name} onChange={(name) => setDraft(template.id, { name })} />
                   <NumberField label="Рейтинг от" value={draft.ratingMin} onChange={(ratingMin) => setDraft(template.id, { ratingMin })} />
                   <NumberField label="Рейтинг до" value={draft.ratingMax} onChange={(ratingMax) => setDraft(template.id, { ratingMax })} />
                   <NumberField label="Приоритет" value={draft.priority} onChange={(priority) => setDraft(template.id, { priority })} />
-                </div>
-                <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-                  <TextField
-                    label="Ключевые слова"
-                    value={draft.keywords}
-                    onChange={(keywords) => setDraft(template.id, { keywords })}
+                  <SelectField
+                    label="Тип"
+                    value={draft.kind}
+                    options={["REVIEW", "MESSAGE"]}
+                    onChange={(kind) => setDraft(template.id, { kind: kind as TemplateDraft["kind"] })}
                   />
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <TextField label="Ключевые слова" value={draft.keywords} onChange={(keywords) => setDraft(template.id, { keywords })} />
                   <label className="block">
                     <span className="mb-1 block text-xs font-semibold text-moss">Текст ответа</span>
                     <textarea
@@ -186,15 +199,15 @@ export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientRe
                     />
                   </label>
                 </div>
-                <label className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-moss">
-                  <input
-                    className="rounded border-line text-sea"
-                    checked={draft.active}
-                    type="checkbox"
-                    onChange={(event) => setDraft(template.id, { active: event.target.checked })}
+
+                <div className="mt-4 flex flex-wrap gap-4">
+                  <Checkbox checked={draft.active} label="Использовать при подборе" onChange={(active) => setDraft(template.id, { active })} />
+                  <Checkbox
+                    checked={draft.autoSend}
+                    label="Автоотправка для отзывов"
+                    onChange={(autoSend) => setDraft(template.id, { autoSend })}
                   />
-                  Использовать при подборе
-                </label>
+                </div>
               </section>
             );
           })}
@@ -202,13 +215,15 @@ export function TemplatesPage({ initialTemplates }: { initialTemplates: ClientRe
       </div>
     </>
   );
+}
 
-  function setDraft(id: string, patch: Partial<TemplateDraft>) {
-    setDrafts((current) => ({
-      ...current,
-      [id]: { ...(current[id] ?? emptyTemplate), ...patch },
-    }));
-  }
+function Checkbox({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="inline-flex items-center gap-2 text-sm font-semibold text-moss">
+      <input className="rounded border-line text-sea" checked={checked} type="checkbox" onChange={(event) => onChange(event.target.checked)} />
+      {label}
+    </label>
+  );
 }
 
 function toDraft(template: ClientReplyTemplate): TemplateDraft {
@@ -220,5 +235,7 @@ function toDraft(template: ClientReplyTemplate): TemplateDraft {
     text: template.text,
     priority: template.priority,
     active: template.active,
+    autoSend: template.autoSend,
+    kind: template.kind,
   };
 }

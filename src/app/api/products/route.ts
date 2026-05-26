@@ -12,6 +12,18 @@ const createProductSchema = z.object({
   avitoCategorySlug: z.string().nullable().optional(),
   avitoCategoryName: z.string().nullable().optional(),
   avitoFields: z.record(z.string(), z.string()).optional(),
+  colorGroups: z
+    .array(
+      z.object({
+        color: z.string(),
+        avitoColorValue: z.string().nullable().optional(),
+        basePrice: z.coerce.number().int().min(0).optional(),
+        defaultStockQty: z.coerce.number().int().min(0).optional(),
+        description: z.string().optional(),
+        avitoFields: z.record(z.string(), z.string()).optional(),
+      }),
+    )
+    .optional(),
 });
 
 export async function GET() {

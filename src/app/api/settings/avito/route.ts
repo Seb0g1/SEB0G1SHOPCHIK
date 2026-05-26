@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAvitoSettings, getRawAvitoSettings, upsertAvitoSettings } from "@/lib/settings";
 import { AvitoClient } from "@/lib/avito/client";
+import { saveCapabilities } from "@/lib/autoload";
 
 const schema = z.object({
   clientId: z.string().optional(),
   clientSecret: z.string().optional(),
+  avitoUserId: z.string().optional(),
   sellerLocation: z.string().optional(),
   contactName: z.string().optional(),
   phone: z.string().optional(),
@@ -13,6 +15,8 @@ const schema = z.object({
   address: z.string().optional(),
   publicFeedUrl: z.string().optional(),
   redirectUrl: z.string().optional(),
+  autoloadReportEmail: z.string().optional(),
+  autoloadScheduleJson: z.string().optional(),
 });
 
 export async function GET() {
@@ -36,11 +40,14 @@ export async function POST() {
   const client = new AvitoClient({
     clientId: settings.clientId,
     clientSecret: settings.clientSecret,
+    accountId: settings.avitoUserId,
   });
 
   try {
     const result = await client.testConnection();
-    return NextResponse.json(result);
+    const capabilities = await client.probeCapabilities();
+    await saveCapabilities(capabilities);
+    return NextResponse.json({ ...result, capabilities });
   } catch (error) {
     return NextResponse.json(
       {

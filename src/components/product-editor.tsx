@@ -6,7 +6,7 @@ import { ImagePlus, PackagePlus, Save, Send, Sparkles, UploadCloud } from "lucid
 import type { ClientProduct } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
-import { Button, NumberField, PageHeader, StatusPill, TextField, requestJson } from "@/components/ui-kit";
+import { Button, NumberField, PageHeader, SelectField, StatusPill, TextField, requestJson } from "@/components/ui-kit";
 import { AvitoFieldControl, DynamicFields, LinkedSizePicker } from "@/components/product-wizard";
 
 type Tab = "params" | "photos" | "variants" | "description" | "publication";
@@ -18,15 +18,20 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
   const [tab, setTab] = useState<Tab>("params");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [photoColor, setPhotoColor] = useState(initialProduct.variants[0]?.color ?? "");
+  const [bulkPrice, setBulkPrice] = useState({ color: "", mode: "SET", value: initialProduct.basePrice, rounding: "NONE" });
   const [variantDraft, setVariantDraft] = useState({
     color: initialProduct.variants[0]?.color ?? "",
     sizes: initialProduct.variants.length ? [...new Set(initialProduct.variants.map((variant) => variant.size))] : [],
-    price: product.basePrice,
+    price: initialProduct.basePrice,
     stockQty: 2,
   });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const colors = useMemo(() => [...new Set(product.variants.map((variant) => variant.color))], [product.variants]);
+  const colors = useMemo(
+    () => [...new Set([...product.colorGroups.map((group) => group.avitoColorValue || group.color), ...product.variants.map((variant) => variant.color)].filter(Boolean))],
+    [product.colorGroups, product.variants],
+  );
   const flatCategories = useMemo(() => flattenCategories(tree), [tree]);
   const activeVariants = product.variants.filter((variant) => variant.stockQty > 0 && variant.publicationStatus !== "SUSPENDED");
   const brandField = findFieldByRole(fields, "brand");
@@ -42,9 +47,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
 
   useEffect(() => {
     if (!product.avitoCategorySlug) return;
-    requestJson<{ data: AvitoCatalogField[] }>(
-      `/api/avito/catalog/nodes/${encodeURIComponent(product.avitoCategorySlug)}/fields`,
-    )
+    requestJson<{ data: AvitoCatalogField[] }>(`/api/avito/catalog/nodes/${encodeURIComponent(product.avitoCategorySlug)}/fields`)
       .then((payload) => setFields(payload.data))
       .catch(() => setFields([]));
   }, [product.avitoCategorySlug]);
@@ -68,6 +71,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
           avitoFields,
           status: product.status,
           variants: product.variants,
+          colorGroups: product.colorGroups,
         }),
       });
       setProduct(payload.product);
@@ -80,7 +84,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
     if (!files.length) return;
     await withBusy("photos", async () => {
       const data = new FormData();
-      data.append("color", colors[0] || variantDraft.color || "Без цвета");
+      data.append("color", photoColor || colors[0] || variantDraft.color || "Без цвета");
       files.forEach((file) => data.append("files", file));
       const response = await fetch(`/api/products/${product.id}/photos`, { method: "POST", body: data });
       if (!response.ok) throw new Error(await response.text());
@@ -108,23 +112,43 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
 
   async function generateDescription() {
     await withBusy("description", async () => {
-      const payload = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}/description/generate`, {
-        method: "POST",
-      });
+      const payload = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}/description/generate`, { method: "POST" });
       setProduct(payload.product);
       setMessage("Описание обновлено.");
     });
   }
 
+  async function applyBulkPrice() {
+    await withBusy("bulkPrice", async () => {
+      const payload = await requestJson<{ preview: { count: number } }>(`/api/products/${product.id}/bulk-price/apply`, {
+        method: "POST",
+        body: JSON.stringify({
+          colors: bulkPrice.color ? [bulkPrice.color] : undefined,
+          mode: bulkPrice.mode,
+          value: bulkPrice.value,
+          rounding: bulkPrice.rounding,
+        }),
+      });
+      const refreshed = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}`);
+      setProduct(refreshed.product);
+      setMessage(`Цены обновлены: ${payload.preview.count} вариантов.`);
+    });
+  }
+
   async function submit() {
     await withBusy("submit", async () => {
-      const payload = await requestJson<{ errors: string[]; warnings: string[] }>(`/api/publications/${product.id}/submit`, {
-        method: "POST",
-      });
+      const payload = await requestJson<{ errors: string[]; warnings: string[] }>(`/api/publications/${product.id}/submit`, { method: "POST" });
       const refreshed = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}`);
       setProduct(refreshed.product);
       setTab("publication");
       setMessage(payload.errors[0] || payload.warnings[0] || "Запрос отправлен в Avito.");
+    });
+  }
+
+  function patchVariant(id: string, patch: Partial<ClientProduct["variants"][number]>) {
+    setProduct({
+      ...product,
+      variants: product.variants.map((variant) => (variant.id === id ? { ...variant, ...patch, needsSync: true } : variant)),
     });
   }
 
@@ -166,15 +190,13 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
               {[
                 ["params", "Параметры"],
                 ["photos", "Фото"],
-                ["variants", "Варианты"],
+                ["variants", "Матрица"],
                 ["description", "Описание"],
                 ["publication", "Публикация"],
               ].map(([id, label]) => (
                 <button
                   key={id}
-                  className={`h-10 rounded-md px-3 text-sm font-semibold ${
-                    tab === id ? "bg-white text-ink shadow-panel" : "text-moss hover:bg-white"
-                  }`}
+                  className={`h-10 rounded-md px-3 text-sm font-semibold ${tab === id ? "bg-white text-ink shadow-panel" : "text-moss hover:bg-white"}`}
                   type="button"
                   onClick={() => setTab(id as Tab)}
                 >
@@ -188,7 +210,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                   <div className="grid gap-4 md:grid-cols-3">
                     <TextField label="Название" value={product.title} onChange={(title) => setProduct({ ...product, title })} />
                     <TextField label="Бренд" value={product.brand ?? ""} onChange={(brand) => setProduct({ ...product, brand })} />
-                    <NumberField label="Цена" value={product.basePrice} onChange={(basePrice) => setProduct({ ...product, basePrice })} />
+                    <NumberField label="Базовая цена" value={product.basePrice} onChange={(basePrice) => setProduct({ ...product, basePrice })} />
                   </div>
                   <label className="block">
                     <span className="mb-1 block text-xs font-semibold text-moss">Категория Avito</span>
@@ -197,12 +219,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                       value={product.avitoCategorySlug ?? ""}
                       onChange={(event) => {
                         const category = flatCategories.find((item) => item.slug === event.target.value);
-                        setProduct({
-                          ...product,
-                          avitoCategorySlug: event.target.value || null,
-                          avitoCategoryName: category?.path ?? null,
-                          avitoFields: {},
-                        });
+                        setProduct({ ...product, avitoCategorySlug: event.target.value || null, avitoCategoryName: category?.path ?? null, avitoFields: {} });
                       }}
                     >
                       <option value="">Выберите категорию</option>
@@ -213,21 +230,20 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                       ))}
                     </select>
                   </label>
-                  <DynamicFields
-                    fields={categoryFields}
-                    values={product.avitoFields}
-                    onChange={(avitoFields) => setProduct({ ...product, avitoFields })}
-                  />
+                  <DynamicFields fields={categoryFields} values={product.avitoFields} onChange={(avitoFields) => setProduct({ ...product, avitoFields })} />
                 </div>
               ) : null}
 
               {tab === "photos" ? (
                 <div className="space-y-4">
-                  <label className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-line bg-canvas p-6 text-center">
-                    <ImagePlus className="h-10 w-10 text-sea" />
-                    <span className="mt-3 text-sm font-semibold">Загрузить фото</span>
-                    <input ref={fileInputRef} className="mt-4 block text-sm" type="file" accept="image/*" multiple />
-                  </label>
+                  <div className="grid gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
+                    <SelectField label="Цвет фото" value={photoColor} options={["", ...colors]} onChange={setPhotoColor} />
+                    <label className="flex min-h-[120px] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-line bg-canvas p-6 text-center">
+                      <ImagePlus className="h-10 w-10 text-sea" />
+                      <span className="mt-3 text-sm font-semibold">Загрузить фото для выбранного цвета</span>
+                      <input ref={fileInputRef} className="mt-4 block text-sm" type="file" accept="image/*" multiple />
+                    </label>
+                  </div>
                   <Button busy={busy === "photos"} onClick={uploadPhotos}>
                     <UploadCloud className="h-4 w-4" />
                     Загрузить
@@ -237,6 +253,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                       <div key={photo.id} className="overflow-hidden rounded-md border border-line">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img className="aspect-square w-full object-cover" src={photo.publicUrl} alt={photo.originalName} />
+                        <p className="truncate px-2 py-1 text-xs text-moss">{photo.color || "общие"}</p>
                       </div>
                     ))}
                   </div>
@@ -247,11 +264,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                 <div className="space-y-5">
                   <div className="grid gap-4 rounded-md border border-line bg-canvas p-4 md:grid-cols-4">
                     {colorField ? (
-                      <AvitoFieldControl
-                        field={colorField}
-                        value={variantDraft.color}
-                        onChange={(color) => setVariantDraft({ ...variantDraft, color })}
-                      />
+                      <AvitoFieldControl field={colorField} value={variantDraft.color} onChange={(color) => setVariantDraft({ ...variantDraft, color })} />
                     ) : (
                       <TextField label="Цвет" value={variantDraft.color} onChange={(color) => setVariantDraft({ ...variantDraft, color })} />
                     )}
@@ -265,20 +278,35 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                     </div>
                     <div className="md:col-span-4">
                       {sizeField ? (
-                        <LinkedSizePicker
-                          field={sizeField}
-                          selected={variantDraft.sizes}
-                          onChange={(sizes) => setVariantDraft({ ...variantDraft, sizes })}
-                        />
+                        <LinkedSizePicker field={sizeField} selected={variantDraft.sizes} onChange={(sizes) => setVariantDraft({ ...variantDraft, sizes })} />
                       ) : (
-                        <p className="rounded-md border border-line bg-white p-3 text-sm text-moss">
-                          Для этой категории Avito не вернул поле размера. Будет создан один вариант без размерной сетки.
-                        </p>
+                        <p className="rounded-md border border-line bg-white p-3 text-sm text-moss">Для этой категории Avito не вернул поле размера.</p>
                       )}
                     </div>
                   </div>
+
+                  <div className="grid gap-4 rounded-md border border-line bg-canvas p-4 md:grid-cols-5">
+                    <SelectField label="Цвет" value={bulkPrice.color} options={["", ...colors]} onChange={(color) => setBulkPrice({ ...bulkPrice, color })} />
+                    <SelectField label="Операция" value={bulkPrice.mode} options={["SET", "ADD", "PERCENT"]} onChange={(mode) => setBulkPrice({ ...bulkPrice, mode })} />
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold text-moss">Значение</span>
+                      <input
+                        className="h-10 w-full rounded-md border-line bg-white text-sm"
+                        type="number"
+                        value={bulkPrice.value}
+                        onChange={(event) => setBulkPrice({ ...bulkPrice, value: Number(event.target.value) })}
+                      />
+                    </label>
+                    <SelectField label="Округление" value={bulkPrice.rounding} options={["NONE", "TO_9", "TO_99"]} onChange={(rounding) => setBulkPrice({ ...bulkPrice, rounding })} />
+                    <div className="flex items-end">
+                      <Button busy={busy === "bulkPrice"} className="w-full" onClick={applyBulkPrice}>
+                        Обновить цены
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="overflow-x-auto rounded-md border border-line">
-                    <table className="min-w-[720px] w-full divide-y divide-line text-sm">
+                    <table className="min-w-[860px] w-full divide-y divide-line text-sm">
                       <thead className="bg-canvas text-xs uppercase text-moss">
                         <tr>
                           <th className="px-3 py-2 text-left">SKU</th>
@@ -286,6 +314,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                           <th className="px-3 py-2 text-left">Размер</th>
                           <th className="px-3 py-2 text-left">Цена</th>
                           <th className="px-3 py-2 text-left">Остаток</th>
+                          <th className="px-3 py-2 text-left">Sync</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-line">
@@ -294,8 +323,25 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                             <td className="px-3 py-2 font-mono text-xs">{variant.sku}</td>
                             <td className="px-3 py-2">{variant.color}</td>
                             <td className="px-3 py-2">{displayVariantSize(variant.size)}</td>
-                            <td className="px-3 py-2">{variant.price}</td>
-                            <td className="px-3 py-2">{variant.stockQty}</td>
+                            <td className="px-3 py-2">
+                              <input
+                                className="h-9 w-28 rounded-md border-line text-sm"
+                                type="number"
+                                value={variant.price}
+                                onChange={(event) => patchVariant(variant.id, { price: Number(event.target.value) })}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input
+                                className="h-9 w-24 rounded-md border-line text-sm"
+                                type="number"
+                                value={variant.stockQty}
+                                onChange={(event) => patchVariant(variant.id, { stockQty: Number(event.target.value) })}
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <StatusPill status={variant.needsSync ? "NEEDS_SYNC" : variant.publicationStatus} />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -313,9 +359,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                   <textarea
                     className="min-h-[220px] w-full rounded-md border-line text-sm"
                     value={product.generatedDescription || product.description}
-                    onChange={(event) =>
-                      setProduct({ ...product, generatedDescription: event.target.value, description: event.target.value })
-                    }
+                    onChange={(event) => setProduct({ ...product, generatedDescription: event.target.value, description: event.target.value })}
                   />
                 </div>
               ) : null}
@@ -342,6 +386,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                         <StatusPill status={run.status} />
                         <span className="text-sm text-moss">{new Date(run.submittedAt).toLocaleString("ru-RU")}</span>
                       </div>
+                      <p className="mt-2 text-sm font-semibold text-moss">{run.reportStatus || "Нет отчета"}</p>
                       {[...run.errors, ...run.warnings].map((item) => (
                         <p key={item} className="mt-2 text-sm text-moss">
                           {item}
@@ -362,9 +407,10 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
             <div className="rounded-md border border-line bg-white p-4 shadow-panel">
               <p className="text-sm font-semibold text-moss">Показатели</p>
               <dl className="mt-3 space-y-2 text-sm">
+                <Row label="Цвета" value={colors.length} />
                 <Row label="Фото" value={product.photos.length} />
                 <Row label="Варианты" value={product.variants.length} />
-                <Row label="Активные" value={activeVariants.length} />
+                <Row label="К синхронизации" value={product.variants.filter((variant) => variant.needsSync).length} />
               </dl>
             </div>
             <Link className="block text-sm font-semibold text-sea" href="/products">
