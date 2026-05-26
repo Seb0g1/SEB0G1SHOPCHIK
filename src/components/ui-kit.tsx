@@ -17,7 +17,7 @@ export function PageHeader({
     <div className="flex flex-col gap-3 border-b border-line bg-white px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0">
         {eyebrow ? <p className="text-xs font-semibold uppercase text-moss">{eyebrow}</p> : null}
-        <h1 className="mt-1 truncate text-2xl font-semibold text-ink">{title}</h1>
+        <h1 className="mt-1 break-words text-2xl font-semibold text-ink">{title}</h1>
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>

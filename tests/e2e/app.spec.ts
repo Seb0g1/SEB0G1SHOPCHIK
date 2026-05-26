@@ -7,10 +7,19 @@ test("creates product through the new CRM flow", async ({ page }) => {
   await expect(page.getByText("dropshipping", { exact: false })).toHaveCount(0);
 
   await page.getByRole("navigation").getByRole("link", { name: "Новый товар" }).click();
-  await expect(page.getByText("Мастер загрузки товара")).toBeVisible();
-  for (let index = 0; index < 5; index += 1) {
-    await page.getByRole("button", { name: "Далее" }).click();
-  }
+  await expect(page.getByText("Загрузка товара по полям Avito")).toBeVisible();
+  await page.getByLabel("Название").fill("Футболка Nike Forza Nocta");
+  await page.getByLabel("Бренд").fill("Nike");
+  await page.getByLabel("Цена").fill("2199");
+  await page.getByRole("button", { name: "Далее" }).click();
+  await page.getByRole("button", { name: "Футболки и топы" }).click();
+  await page.getByLabel("Состояние *").selectOption("Новое");
+  await page.getByLabel("Пол *").selectOption("Мужская");
+  await page.getByRole("button", { name: "Далее" }).click();
+  await page.getByRole("button", { name: "Далее" }).click();
+  await page.getByLabel("Цвет *").fill("Белый");
+  await page.getByLabel("Размеры из Avito").fill("S, M");
+  await page.getByRole("button", { name: "Далее" }).click();
   await page.getByRole("button", { name: "Создать", exact: true }).click();
   await expect(page.getByRole("button", { name: "Проверить и отправить" })).toBeVisible();
 });

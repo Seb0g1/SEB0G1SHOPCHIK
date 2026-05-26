@@ -1,8 +1,10 @@
 import { activeForFeed } from "@/lib/variants";
 import type { AvitoCatalogField } from "@/lib/avito/catalog";
+import { getFieldRole } from "@/lib/avito/field-utils";
 
 export type ValidatedProduct = {
   title: string;
+  brand?: string | null;
   basePrice: number;
   avitoCategorySlug: string | null;
   avitoFieldsJson: string;
@@ -22,6 +24,25 @@ export function validateProductForApi(product: ValidatedProduct, fields: AvitoCa
   if (product.basePrice <= 0) errors.push("Базовая цена должна быть больше нуля.");
 
   for (const field of fields.filter((item) => item.required)) {
+    const role = getFieldRole(field);
+    if (role === "color") {
+      if (activeVariants.some((variant) => !variant.color.trim())) {
+        errors.push(`Заполните обязательное поле: ${field.label}.`);
+      }
+      continue;
+    }
+    if (role === "size") {
+      if (activeVariants.some((variant) => !variant.size.trim())) {
+        errors.push(`Заполните обязательное поле: ${field.label}.`);
+      }
+      continue;
+    }
+    if (role === "brand") {
+      if (!String(product.brand ?? avitoFields[field.key] ?? "").trim()) {
+        errors.push(`Заполните обязательное поле: ${field.label}.`);
+      }
+      continue;
+    }
     if (!String(avitoFields[field.key] ?? "").trim()) {
       errors.push(`Заполните обязательное поле: ${field.label}.`);
     }

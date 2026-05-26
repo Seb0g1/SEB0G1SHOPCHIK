@@ -1,4 +1,5 @@
 import { activeForFeed } from "@/lib/variants";
+import { displayVariantSize } from "@/lib/avito/field-utils";
 
 type FeedSettings = {
   address: string;
@@ -57,7 +58,7 @@ export function buildVariantDescription(product: FeedProduct, variant: FeedProdu
     base.trim(),
     "",
     `Цвет: ${variant.color}`,
-    `Размер: ${variant.size}`,
+    variant.size === "ONE_SIZE" ? "" : `Размер: ${displayVariantSize(variant.size)}`,
     `Артикул: ${variant.sku}`,
     `Остаток: ${variant.stockQty}`,
   ]
@@ -97,7 +98,7 @@ export function buildAvitoFeed(products: FeedProduct[], settings: FeedSettings):
       <Gender>${escapeXml(product.gender)}</Gender>
       ${product.brand ? `<Brand>${escapeXml(product.brand)}</Brand>` : ""}
       <Color>${escapeXml(variant.color)}</Color>
-      <Size>${escapeXml(variant.size)}</Size>
+      ${variant.size === "ONE_SIZE" ? "" : `<Size>${escapeXml(variant.size)}</Size>`}
       <Quantity>${escapeXml(variant.stockQty)}</Quantity>
 ${imageXml}    </Ad>`;
     }),

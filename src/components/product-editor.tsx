@@ -5,8 +5,9 @@ import Link from "next/link";
 import { ImagePlus, PackagePlus, Save, Send, Sparkles, UploadCloud } from "lucide-react";
 import type { ClientProduct } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
+import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
 import { Button, NumberField, PageHeader, StatusPill, TextField, requestJson } from "@/components/ui-kit";
-import { DynamicFields, SizePicker } from "@/components/product-wizard";
+import { AvitoFieldControl, DynamicFields, LinkedSizePicker } from "@/components/product-wizard";
 
 type Tab = "params" | "photos" | "variants" | "description" | "publication";
 
@@ -18,8 +19,8 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [variantDraft, setVariantDraft] = useState({
-    color: "Черный",
-    sizes: ["S", "M", "L", "XL"],
+    color: initialProduct.variants[0]?.color ?? "",
+    sizes: initialProduct.variants.length ? [...new Set(initialProduct.variants.map((variant) => variant.size))] : [],
     price: product.basePrice,
     stockQty: 2,
   });
@@ -28,6 +29,10 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
   const colors = useMemo(() => [...new Set(product.variants.map((variant) => variant.color))], [product.variants]);
   const flatCategories = useMemo(() => flattenCategories(tree), [tree]);
   const activeVariants = product.variants.filter((variant) => variant.stockQty > 0 && variant.publicationStatus !== "SUSPENDED");
+  const brandField = findFieldByRole(fields, "brand");
+  const colorField = findFieldByRole(fields, "color");
+  const sizeField = findFieldByRole(fields, "size");
+  const categoryFields = fields.filter((field) => !isVariantField(field) && !isProductCoreField(field));
 
   useEffect(() => {
     requestJson<{ data: AvitoCategoryNode[] }>("/api/avito/catalog/tree")
@@ -46,6 +51,10 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
 
   async function saveProduct() {
     await withBusy("save", async () => {
+      const avitoFields = {
+        ...product.avitoFields,
+        ...(brandField ? { [brandField.key]: product.brand ?? "" } : {}),
+      };
       const payload = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -56,7 +65,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
           generatedDescription: product.generatedDescription,
           avitoCategorySlug: product.avitoCategorySlug,
           avitoCategoryName: product.avitoCategoryName,
-          avitoFields: product.avitoFields,
+          avitoFields,
           status: product.status,
           variants: product.variants,
         }),
@@ -71,7 +80,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
     if (!files.length) return;
     await withBusy("photos", async () => {
       const data = new FormData();
-      data.append("color", colors[0] || "Белый");
+      data.append("color", colors[0] || variantDraft.color || "Без цвета");
       files.forEach((file) => data.append("files", file));
       const response = await fetch(`/api/products/${product.id}/photos`, { method: "POST", body: data });
       if (!response.ok) throw new Error(await response.text());
@@ -86,7 +95,11 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
     await withBusy("variants", async () => {
       const payload = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}/variants/generate`, {
         method: "POST",
-        body: JSON.stringify(variantDraft),
+        body: JSON.stringify({
+          ...variantDraft,
+          color: variantDraft.color.trim() || "Без цвета",
+          sizes: sizeField ? variantDraft.sizes : ["ONE_SIZE"],
+        }),
       });
       setProduct(payload.product);
       setMessage("Варианты добавлены.");
@@ -201,7 +214,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                     </select>
                   </label>
                   <DynamicFields
-                    fields={fields}
+                    fields={categoryFields}
                     values={product.avitoFields}
                     onChange={(avitoFields) => setProduct({ ...product, avitoFields })}
                   />
@@ -233,7 +246,15 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
               {tab === "variants" ? (
                 <div className="space-y-5">
                   <div className="grid gap-4 rounded-md border border-line bg-canvas p-4 md:grid-cols-4">
-                    <TextField label="Цвет" value={variantDraft.color} onChange={(color) => setVariantDraft({ ...variantDraft, color })} />
+                    {colorField ? (
+                      <AvitoFieldControl
+                        field={colorField}
+                        value={variantDraft.color}
+                        onChange={(color) => setVariantDraft({ ...variantDraft, color })}
+                      />
+                    ) : (
+                      <TextField label="Цвет" value={variantDraft.color} onChange={(color) => setVariantDraft({ ...variantDraft, color })} />
+                    )}
                     <NumberField label="Цена" value={variantDraft.price} onChange={(price) => setVariantDraft({ ...variantDraft, price })} />
                     <NumberField label="Остаток" value={variantDraft.stockQty} onChange={(stockQty) => setVariantDraft({ ...variantDraft, stockQty })} />
                     <div className="flex items-end">
@@ -243,7 +264,17 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                       </Button>
                     </div>
                     <div className="md:col-span-4">
-                      <SizePicker selected={variantDraft.sizes} onChange={(sizes) => setVariantDraft({ ...variantDraft, sizes })} />
+                      {sizeField ? (
+                        <LinkedSizePicker
+                          field={sizeField}
+                          selected={variantDraft.sizes}
+                          onChange={(sizes) => setVariantDraft({ ...variantDraft, sizes })}
+                        />
+                      ) : (
+                        <p className="rounded-md border border-line bg-white p-3 text-sm text-moss">
+                          Для этой категории Avito не вернул поле размера. Будет создан один вариант без размерной сетки.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="overflow-x-auto rounded-md border border-line">
@@ -262,7 +293,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                           <tr key={variant.id}>
                             <td className="px-3 py-2 font-mono text-xs">{variant.sku}</td>
                             <td className="px-3 py-2">{variant.color}</td>
-                            <td className="px-3 py-2">{variant.size}</td>
+                            <td className="px-3 py-2">{displayVariantSize(variant.size)}</td>
                             <td className="px-3 py-2">{variant.price}</td>
                             <td className="px-3 py-2">{variant.stockQty}</td>
                           </tr>
