@@ -124,25 +124,35 @@ describe("avito excel export", () => {
     const buffer = await generateAvitoExcel([product], settings);
     const zip = await JSZip.loadAsync(buffer);
     const xml = await zip.file("xl/worksheets/sheet2.xml")?.async("string");
+    const sharedStringsXml = await zip.file("xl/sharedStrings.xml")?.async("string");
+    const sharedStrings = parseSharedStrings(sharedStringsXml ?? "");
 
     expect(xml).toBeTruthy();
-    expect(cellValue(xml ?? "", "A5")).toBe("AV-NOCTA-WHITE-M");
-    expect(cellValue(xml ?? "", "F5")).toBe("https://amsterdam2.sebog1.ru/api/uploads/product-1/white.jpg");
-    expect(cellValue(xml ?? "", "H5")).toBe("Футболка Nike Forza Nocta (Белый)");
-    expect(cellValue(xml ?? "", "V5")).toBe("48 (M)");
-    expect(cellValue(xml ?? "", "A6")).toBe("AV-NOCTA-BLACK-S");
-    expect(cellValue(xml ?? "", "V6")).toBe("46 (S)");
+    expect(xml).not.toContain("inlineStr");
+    expect(cellValue(xml ?? "", sharedStrings, "A5")).toBe("AV-NOCTA-WHITE-M");
+    expect(cellValue(xml ?? "", sharedStrings, "F5")).toBe("https://amsterdam2.sebog1.ru/api/uploads/product-1/white.jpg");
+    expect(cellValue(xml ?? "", sharedStrings, "H5")).toBe("Футболка Nike Forza Nocta (Белый)");
+    expect(cellValue(xml ?? "", sharedStrings, "V5")).toBe("48 (M)");
+    expect(cellValue(xml ?? "", sharedStrings, "A6")).toBe("AV-NOCTA-BLACK-S");
+    expect(cellValue(xml ?? "", sharedStrings, "V6")).toBe("46 (S)");
     expect(xml).toContain("<dataValidations");
   });
 });
 
-function cellValue(xml: string, ref: string) {
+function cellValue(xml: string, sharedStrings: string[], ref: string) {
   const match = xml.match(new RegExp(`<c r="${ref}"[^>]*>([\\s\\S]*?)<\\/c>`));
   if (!match) return "";
   const inline = match[1].match(/<t>([\s\S]*?)<\/t>/);
   if (inline) return unescapeXml(inline[1]);
   const value = match[1].match(/<v>([\s\S]*?)<\/v>/);
-  return value ? unescapeXml(value[1]) : "";
+  if (!value) return "";
+  return match[0].includes('t="s"') ? (sharedStrings[Number(value[1])] ?? "") : unescapeXml(value[1]);
+}
+
+function parseSharedStrings(xml: string) {
+  return [...xml.matchAll(/<si\b[\s\S]*?<t(?:\s+xml:space="preserve")?>([\s\S]*?)<\/t>[\s\S]*?<\/si>/g)].map((match) =>
+    unescapeXml(match[1]),
+  );
 }
 
 function unescapeXml(value: string) {

@@ -191,12 +191,16 @@ export async function generateAvitoExcel(products: AvitoExcelProduct[], settings
   const template = await fs.readFile(templatePath);
   const zip = await JSZip.loadAsync(template);
   const sheetFile = zip.file("xl/worksheets/sheet2.xml");
+  const sharedStringsFile = zip.file("xl/sharedStrings.xml");
   if (!sheetFile) throw new Error(`Лист шаблона не найден: ${categorySheetName}`);
+  if (!sharedStringsFile) throw new Error("В шаблоне Avito не найден sharedStrings.xml.");
 
-  const sheetXml = await sheetFile.async("string");
+  const [sheetXml, sharedStringsXml] = await Promise.all([sheetFile.async("string"), sharedStringsFile.async("string")]);
+  const sharedStrings = createSharedStringWriter(sharedStringsXml);
   const rows = buildAvitoExcelRows(products, settings);
-  const updatedSheetXml = replaceDataRows(sheetXml, rows);
+  const updatedSheetXml = replaceDataRows(sheetXml, rows, sharedStrings);
   zip.file("xl/worksheets/sheet2.xml", updatedSheetXml);
+  zip.file("xl/sharedStrings.xml", sharedStrings.toXml());
 
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
 }
@@ -308,7 +312,7 @@ function escapeHtml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function replaceDataRows(sheetXml: string, rows: AvitoExcelRow[]) {
+function replaceDataRows(sheetXml: string, rows: AvitoExcelRow[], sharedStrings: SharedStringWriter) {
   const match = sheetXml.match(/<sheetData>([\s\S]*?)<\/sheetData>/);
   if (!match) throw new Error("В шаблоне Avito не найден блок sheetData.");
 
@@ -316,7 +320,7 @@ function replaceDataRows(sheetXml: string, rows: AvitoExcelRow[]) {
     .filter((rowMatch) => Number(rowMatch[1]) < dataStartRow)
     .map((rowMatch) => rowMatch[0])
     .join("");
-  const dataRows = rows.map((row, index) => rowXml(dataStartRow + index, row)).join("");
+  const dataRows = rows.map((row, index) => rowXml(dataStartRow + index, row, sharedStrings)).join("");
   const nextSheetData = `<sheetData>${headerRows}${dataRows}</sheetData>`;
   const lastRow = Math.max(dataStartRow + rows.length - 1, 4);
 
@@ -325,7 +329,7 @@ function replaceDataRows(sheetXml: string, rows: AvitoExcelRow[]) {
     .replace(/<sheetData>[\s\S]*?<\/sheetData>/, nextSheetData);
 }
 
-function rowXml(rowNumber: number, row: AvitoExcelRow) {
+function rowXml(rowNumber: number, row: AvitoExcelRow, sharedStrings: SharedStringWriter) {
   const values: Array<string | number> = [
     row.id,
     row.placement,
@@ -357,16 +361,16 @@ function rowXml(rowNumber: number, row: AvitoExcelRow) {
     row.companyName,
   ];
   const cells = values
-    .map((value, index) => cellXml(`${columnName(index + 1)}${rowNumber}`, value))
+    .map((value, index) => cellXml(`${columnName(index + 1)}${rowNumber}`, value, sharedStrings))
     .filter(Boolean)
     .join("");
   return `<row r="${rowNumber}">${cells}</row>`;
 }
 
-function cellXml(ref: string, value: string | number) {
+function cellXml(ref: string, value: string | number, sharedStrings: SharedStringWriter) {
   if (value === "") return "";
   if (typeof value === "number") return `<c r="${ref}"><v>${value}</v></c>`;
-  return `<c r="${ref}" t="inlineStr"><is><t>${escapeXmlText(value)}</t></is></c>`;
+  return `<c r="${ref}" t="s"><v>${sharedStrings.add(value)}</v></c>`;
 }
 
 function columnName(index: number) {
@@ -387,4 +391,33 @@ function escapeXmlText(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+type SharedStringWriter = {
+  add(value: string): number;
+  toXml(): string;
+};
+
+function createSharedStringWriter(sourceXml: string): SharedStringWriter {
+  const existingCount = Number(sourceXml.match(/\bcount="(\d+)"/)?.[1] ?? 0);
+  const existingUniqueCount = Number(sourceXml.match(/\buniqueCount="(\d+)"/)?.[1] ?? existingCount);
+  const existingItems = sourceXml.match(/<si\b[\s\S]*?<\/si>/g) ?? [];
+  const additions: string[] = [];
+
+  return {
+    add(value: string) {
+      const index = existingItems.length + additions.length;
+      const preserve = value !== value.trim() || /\s{2,}|\r|\n|\t/.test(value);
+      additions.push(`<si><t${preserve ? ' xml:space="preserve"' : ""}>${escapeXmlText(value)}</t></si>`);
+      return index;
+    },
+    toXml() {
+      const sstOpen = sourceXml.match(/<sst\b[^>]*>/)?.[0];
+      if (!sstOpen) throw new Error("Некорректный sharedStrings.xml в шаблоне Avito.");
+      const nextOpen = sstOpen
+        .replace(/\bcount="\d+"/, `count="${existingCount + additions.length}"`)
+        .replace(/\buniqueCount="\d+"/, `uniqueCount="${existingUniqueCount + additions.length}"`);
+      return sourceXml.replace(/<sst\b[^>]*>[\s\S]*<\/sst>/, `${nextOpen}${existingItems.join("")}${additions.join("")}</sst>`);
+    },
+  };
 }

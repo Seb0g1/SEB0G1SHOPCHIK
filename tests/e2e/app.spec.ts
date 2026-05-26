@@ -37,6 +37,9 @@ test("creates product through the modern Avito matrix wizard", async ({ page }) 
   expect(download.suggestedFilename()).toMatch(/seb0g1shopchik-avito-products-\d{4}-\d{2}-\d{2}\.xlsx/);
   await page.getByRole("button", { name: "Матрица" }).click();
   await expect(page.getByText("AV-", { exact: false }).first()).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Удалить товар" }).click();
+  await expect(page).toHaveURL(/\/products$/);
 });
 
 test("manages reviews, templates and automation pages", async ({ page }) => {

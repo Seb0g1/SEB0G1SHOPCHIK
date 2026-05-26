@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { toClientProduct } from "@/lib/serializers";
+import { uploadRoot } from "@/lib/storage";
 import { expandVariants, makeSku } from "@/lib/variants";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 
 export const productInclude = {
   supplier: true,
@@ -24,6 +27,22 @@ export async function getProduct(id: string) {
     include: productInclude,
   });
   return product ? toClientProduct(product) : null;
+}
+
+export async function deleteProduct(id: string) {
+  const product = await prisma.productTemplate.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!product) return false;
+
+  await prisma.productTemplate.delete({ where: { id } });
+  const productUploadDir = path.resolve(uploadRoot(), id);
+  const uploadRootDir = path.resolve(uploadRoot());
+  if (productUploadDir.startsWith(uploadRootDir)) {
+    await rm(productUploadDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+  return true;
 }
 
 export async function createProduct(input: {

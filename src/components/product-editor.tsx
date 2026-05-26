@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ImagePlus, PackagePlus, Save, Send, Sparkles, UploadCloud } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ImagePlus, PackagePlus, Save, Send, Sparkles, Trash2, UploadCloud } from "lucide-react";
 import type { ClientProduct, ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
@@ -14,6 +15,7 @@ import { ExcelDownloadButton } from "@/components/excel-download-button";
 type Tab = "params" | "photos" | "variants" | "description" | "publication";
 
 export function ProductEditor({ initialProduct }: { initialProduct: ClientProduct }) {
+  const router = useRouter();
   const [product, setProduct] = useState(initialProduct);
   const [tree, setTree] = useState<AvitoCategoryNode[]>([]);
   const [fields, setFields] = useState<AvitoCatalogField[]>([]);
@@ -157,6 +159,16 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
     });
   }
 
+  async function removeProduct() {
+    if (!window.confirm(`Удалить товар "${product.title}"? Это удалит варианты и фото товара.`)) return;
+    await withBusy("delete", async () => {
+      const response = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await response.text());
+      router.push("/products");
+      router.refresh();
+    });
+  }
+
   function patchVariant(id: string, patch: Partial<ClientProduct["variants"][number]>) {
     setProduct({
       ...product,
@@ -188,6 +200,10 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
             <Button tone="secondary" busy={busy === "save"} onClick={saveProduct}>
               <Save className="h-4 w-4" />
               Сохранить
+            </Button>
+            <Button tone="danger" busy={busy === "delete"} onClick={removeProduct}>
+              <Trash2 className="h-4 w-4" />
+              Удалить товар
             </Button>
             <Button busy={busy === "submit"} onClick={submit}>
               <Send className="h-4 w-4" />

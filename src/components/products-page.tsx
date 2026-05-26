@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Filter, PackagePlus, Search } from "lucide-react";
+import { Filter, PackagePlus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ClientProduct } from "@/lib/client-types";
 import { Button, EmptyState, PageHeader, SelectField, StatusPill, formatMoney, requestJson } from "@/components/ui-kit";
@@ -63,6 +63,19 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
       setNotice(error instanceof Error ? error.message : "Не удалось обновить цены");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function deleteProduct(product: ClientProduct) {
+    if (!window.confirm(`Удалить товар "${product.title}"? Это удалит варианты и фото товара.`)) return;
+    setNotice("");
+    try {
+      const response = await fetch(`/api/products/${product.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await response.text());
+      setItems((current) => current.filter((item) => item.id !== product.id));
+      setNotice("Товар удален.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Не удалось удалить товар.");
     }
   }
 
@@ -135,17 +148,17 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
 
         {filtered.length ? (
           <div className="overflow-hidden rounded-md border border-line bg-white shadow-panel">
-            <div className="grid grid-cols-[1.5fr_1fr_.55fr_.55fr_.65fr_.65fr] gap-3 border-b border-line bg-canvas px-4 py-3 text-xs font-semibold uppercase text-moss max-lg:hidden">
+            <div className="grid grid-cols-[1.45fr_1fr_.5fr_.5fr_.6fr_.95fr] gap-3 border-b border-line bg-canvas px-4 py-3 text-xs font-semibold uppercase text-moss max-lg:hidden">
               <span>Товар</span>
               <span>Категория и цвета</span>
               <span>Объявления</span>
               <span>Остаток</span>
               <span>Статус</span>
-              <span>Excel</span>
+              <span>Действия</span>
             </div>
             <div className="divide-y divide-line">
               {filtered.map((product) => (
-                <div key={product.id} className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.5fr_1fr_.55fr_.55fr_.65fr_.65fr] lg:items-center">
+                <div key={product.id} className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.45fr_1fr_.5fr_.5fr_.6fr_.95fr] lg:items-center">
                   <Link className="flex min-w-0 items-center gap-3" href={`/products/${product.id}`}>
                     <ProductThumb product={product} />
                     <div className="min-w-0">
@@ -170,7 +183,12 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
                   </p>
                   <p className="text-sm font-semibold">{product.variants.reduce((sum, variant) => sum + variant.stockQty, 0)}</p>
                   <StatusPill status={product.status} />
-                  <ExcelDownloadButton productIds={[product.id]} label="Excel" compact />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ExcelDownloadButton productIds={[product.id]} label="Excel" compact />
+                    <Button aria-label={`Удалить ${product.title}`} tone="danger" onClick={() => deleteProduct(product)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getProduct, updateProduct } from "@/lib/products";
+import { deleteProduct, getProduct, updateProduct } from "@/lib/products";
 
 const updateProductSchema = z.object({
   title: z.string().min(2).optional(),
@@ -69,4 +69,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const product = await updateProduct(id, parsed.data);
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
   return NextResponse.json({ product });
+}
+
+export async function DELETE(_: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const deleted = await deleteProduct(id);
+  if (!deleted) return NextResponse.json({ error: "Product not found" }, { status: 404 });
+  return NextResponse.json({ ok: true });
 }
