@@ -18,6 +18,7 @@ export type ClientVariant = {
 export type ClientColorGroup = {
   id: string;
   productId: string;
+  supplierId: string | null;
   color: string;
   avitoColorValue: string | null;
   basePrice: number;
@@ -58,6 +59,8 @@ export type ClientProduct = {
   id: string;
   title: string;
   brand: string | null;
+  supplierId: string | null;
+  supplier: ClientSupplier | null;
   category: string;
   goodsType: string;
   productType: string;
@@ -79,6 +82,61 @@ export type ClientProduct = {
   colorGroups: ClientColorGroup[];
   photos: ClientPhoto[];
   publicationRuns: ClientPublicationRun[];
+};
+
+export type ClientSupplier = {
+  id: string;
+  name: string;
+  contactName: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  telegram: string | null;
+  website: string | null;
+  notes: string;
+  defaultMessageTemplate: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClientCustomerOrder = {
+  id: string;
+  avitoOrderId: string;
+  avitoItemId: string | null;
+  avitoChatId: string | null;
+  buyerName: string | null;
+  buyerPhone: string | null;
+  itemTitle: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  price: number;
+  status: string;
+  deliveryText: string | null;
+  productId: string | null;
+  variantId: string | null;
+  avitoCreatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  product?: Pick<ClientProduct, "id" | "title" | "brand"> | null;
+  variant?: Pick<ClientVariant, "id" | "sku" | "color" | "size" | "price"> | null;
+  supplierTask: ClientSupplierTask | null;
+};
+
+export type ClientSupplierTask = {
+  id: string;
+  orderId: string;
+  supplierId: string | null;
+  generatedMessage: string;
+  status: string;
+  notes: string;
+  copiedAt: string | null;
+  contactedAt: string | null;
+  doneAt: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  supplier: ClientSupplier | null;
 };
 
 export type ClientAvitoSettings = {
@@ -149,6 +207,7 @@ export type ClientAutomationState = {
   messagesEnabled: boolean;
   messageAutoRepliesEnabled: boolean;
   reportsEnabled: boolean;
+  ordersEnabled: boolean;
   status: string;
   lastOnlinePingAt: string | null;
   lastReviewsSyncAt: string | null;
@@ -156,6 +215,7 @@ export type ClientAutomationState = {
   lastMessagesSyncAt: string | null;
   lastMessageRulesAt: string | null;
   lastReportsSyncAt: string | null;
+  lastOrdersSyncAt: string | null;
   lastError: string | null;
   capabilities: Record<string, unknown>;
   updatedAt: string;

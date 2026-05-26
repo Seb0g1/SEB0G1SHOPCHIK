@@ -70,3 +70,19 @@ test("creates message keyword rules", async ({ page }) => {
   await page.goto("/messages");
   await expect(page.getByRole("heading", { name: "Сообщения" })).toBeVisible();
 });
+test("manages suppliers and opens orders queue", async ({ page }) => {
+  await page.goto("/suppliers");
+  await expect(page.getByRole("heading", { name: "Поставщики" })).toBeVisible();
+  const supplierName = `Поставщик ${Date.now()}`;
+  await page.getByLabel("Название поставщика").fill(supplierName);
+  await page.getByLabel("Telegram").fill("@supplier");
+  await page.getByRole("button", { name: "Сохранить" }).click();
+  await expect(page.getByText("Поставщик сохранен.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: supplierName })).toBeVisible();
+
+  await page.goto("/orders");
+  await expect(page.getByRole("heading", { name: "Заказы" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Синхронизировать заказы" })).toBeVisible();
+  await expect(page.getByText("XML feed")).toHaveCount(0);
+  await expect(page.getByText("dropshipping", { exact: false })).toHaveCount(0);
+});

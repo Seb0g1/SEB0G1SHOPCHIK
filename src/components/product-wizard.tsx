@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ImagePlus, Plus, Search, Trash2 } from "lucide-react";
+import type { ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { findFieldByRole, getFieldRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
 import { Button, NumberField, PageHeader, SelectField, TextField, requestJson } from "@/components/ui-kit";
@@ -18,6 +19,7 @@ type ColorGroupDraft = {
   sizes: string[];
   description: string;
   avitoFields: Record<string, string>;
+  supplierId: string;
   photos: File[];
 };
 
@@ -32,6 +34,7 @@ export function ProductWizard() {
   const [categoryQuery, setCategoryQuery] = useState("");
   const [catalogSource, setCatalogSource] = useState<"api" | "cache" | "fallback">("fallback");
   const [catalogWarning, setCatalogWarning] = useState("");
+  const [suppliers, setSuppliers] = useState<ClientSupplier[]>([]);
   const [tree, setTree] = useState<AvitoCategoryNode[]>([]);
   const [fields, setFields] = useState<AvitoCatalogField[]>([]);
   const [form, setForm] = useState({
@@ -41,6 +44,7 @@ export function ProductWizard() {
     avitoCategorySlug: "",
     avitoCategoryName: "",
     avitoFields: {} as Record<string, string>,
+    supplierId: "",
     description: "",
   });
   const [groups, setGroups] = useState<ColorGroupDraft[]>([
@@ -64,6 +68,10 @@ export function ProductWizard() {
   const totalPhotos = groups.reduce((sum, group) => sum + group.photos.length, 0);
 
   useEffect(() => {
+    requestJson<{ suppliers: ClientSupplier[] }>("/api/suppliers")
+      .then((payload) => setSuppliers(payload.suppliers.filter((supplier) => supplier.active)))
+      .catch(() => setSuppliers([]));
+
     requestJson<CatalogResponse<AvitoCategoryNode[]>>("/api/avito/catalog/tree")
       .then((payload) => {
         setTree(payload.data);
@@ -101,12 +109,14 @@ export function ProductWizard() {
         body: JSON.stringify({
           title: form.title,
           brand: form.brand,
+          supplierId: form.supplierId || null,
           basePrice: form.basePrice,
           avitoCategorySlug: form.avitoCategorySlug,
           avitoCategoryName: form.avitoCategoryName,
           avitoFields,
           colorGroups: groups.map((group) => ({
             color: group.color,
+            supplierId: group.supplierId || null,
             avitoColorValue: group.avitoColorValue || group.color,
             basePrice: group.price || form.basePrice,
             defaultStockQty: group.stockQty,
@@ -216,6 +226,12 @@ export function ProductWizard() {
                 <TextField label="Бренд" value={form.brand} onChange={(brand) => setForm((item) => ({ ...item, brand }))} />
                 <NumberField label="Базовая цена" value={form.basePrice} onChange={(basePrice) => setForm((item) => ({ ...item, basePrice }))} />
               </div>
+              <SupplierSelect
+                label="Поставщик по умолчанию"
+                value={form.supplierId}
+                suppliers={suppliers}
+                onChange={(supplierId) => setForm((item) => ({ ...item, supplierId }))}
+              />
             </div>
           ) : null}
 
@@ -270,6 +286,7 @@ export function ProductWizard() {
               sizeField={sizeField}
               groups={groups}
               basePrice={form.basePrice}
+              suppliers={suppliers}
               onChange={setGroups}
             />
           ) : null}
@@ -323,12 +340,14 @@ function ColorMatrix({
   sizeField,
   groups,
   basePrice,
+  suppliers,
   onChange,
 }: {
   colorField?: AvitoCatalogField;
   sizeField?: AvitoCatalogField;
   groups: ColorGroupDraft[];
   basePrice: number;
+  suppliers: ClientSupplier[];
   onChange: (groups: ColorGroupDraft[]) => void;
 }) {
   function update(id: string, patch: Partial<ColorGroupDraft>) {
@@ -365,6 +384,12 @@ function ColorMatrix({
               )}
               <NumberField label="Цена цвета" value={group.price || basePrice} onChange={(price) => update(group.id, { price })} />
               <NumberField label="Остаток на размер" value={group.stockQty} onChange={(stockQty) => update(group.id, { stockQty })} />
+              <SupplierSelect
+                label="Поставщик цвета"
+                value={group.supplierId}
+                suppliers={suppliers}
+                onChange={(supplierId) => update(group.id, { supplierId })}
+              />
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-moss">Фото цвета</span>
                 <input
@@ -549,8 +574,35 @@ function makeGroup(color: string, price = 0): ColorGroupDraft {
     sizes: [],
     description: "",
     avitoFields: {},
+    supplierId: "",
     photos: [],
   };
+}
+
+function SupplierSelect({
+  label,
+  value,
+  suppliers,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  suppliers: ClientSupplier[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-semibold text-moss">{label}</span>
+      <select className="h-10 w-full rounded-md border-line bg-white text-sm" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Не назначен</option>
+        {suppliers.map((supplier) => (
+          <option key={supplier.id} value={supplier.id}>
+            {supplier.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 function Intro({ title, text }: { title: string; text: string }) {

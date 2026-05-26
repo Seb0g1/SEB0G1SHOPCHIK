@@ -250,6 +250,21 @@ export class AvitoClient {
     });
   }
 
+  async getOrders(params: Record<string, string | number | boolean | undefined> = {}): Promise<unknown> {
+    const path = configuredPath("AVITO_ORDERS_LIST_PATH", "/order-management/1/orders", {
+      accountId: this.accountId,
+    });
+    return this.requestConfigured(path, { method: "GET" }, params);
+  }
+
+  async getOrder(orderId: string): Promise<unknown> {
+    const path = configuredPath("AVITO_ORDER_DETAIL_PATH", "/order-management/1/orders/{orderId}", {
+      accountId: this.accountId,
+      orderId,
+    });
+    return this.requestConfigured(path, { method: "GET" });
+  }
+
   async probeCapabilities(): Promise<Record<string, CapabilityProbeResult>> {
     const result: Record<string, CapabilityProbeResult> = {};
 
@@ -262,6 +277,7 @@ export class AvitoClient {
       : { available: false, status: "missing_endpoint", message: "Путь отправки ответов не настроен." };
     result.onlinePresence = await probeCapability(() => this.setOnlinePresence());
     result.messenger = await probeCapability(() => this.getChats({ limit: 1 }));
+    result.orders = await probeCapability(() => this.getOrders({ limit: 1, per_page: 1, page: 0 }));
 
     return result;
   }

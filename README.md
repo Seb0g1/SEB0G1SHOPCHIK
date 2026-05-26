@@ -15,7 +15,7 @@ npm.cmd run dev
 
 Открыть: `http://localhost:4317`.
 
-Worker для online, отзывов, сообщений и отчетов запускается вторым терминалом:
+Worker для online, отзывов, сообщений, отчетов и заказов запускается вторым терминалом:
 
 ```powershell
 npm.cmd run worker
@@ -26,6 +26,8 @@ npm.cmd run worker
 - `/products` — каталог, фильтры, массовая смена цен.
 - `/products/new` — мастер “один бренд + одна категория Avito + много цветов/размеров”.
 - `/products/:id` — редактор параметров, фото по цветам, матрица вариантов, описание, публикация.
+- `/suppliers` — справочник поставщиков, контакты и шаблон сообщения по заказу.
+- `/orders` — очередь заказов Avito, сопоставление с товаром/цветом/размером и готовый черновик поставщику.
 - `/reviews` — очередь отзывов: новые, черновики, автоотправленные, ошибки, низкая оценка.
 - `/templates` — шаблоны ответов на отзывы, включая `autoSend`.
 - `/messages` — чаты и история автоответов.
@@ -79,11 +81,14 @@ AVITO_MESSENGER_CHATS_PATH=/messenger/v2/accounts/{accountId}/chats
 AVITO_MESSENGER_MESSAGES_PATH=/messenger/v3/accounts/{accountId}/chats/{chatId}/messages
 AVITO_MESSENGER_SEND_PATH=/messenger/v1/accounts/{accountId}/chats/{chatId}/messages
 AVITO_ONLINE_PRESENCE_PATH=/messenger/v1/accounts/{accountId}/online
+AVITO_ORDERS_LIST_PATH=/order-management/1/orders
+AVITO_ORDER_DETAIL_PATH=/order-management/1/orders/{orderId}
 
 AVITO_WORKER_ONLINE_INTERVAL_SECONDS=45
 AVITO_WORKER_REVIEWS_INTERVAL_SECONDS=180
 AVITO_WORKER_MESSAGES_INTERVAL_SECONDS=45
 AVITO_WORKER_REPORTS_INTERVAL_SECONDS=300
+AVITO_WORKER_ORDERS_INTERVAL_SECONDS=120
 
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
@@ -135,7 +140,7 @@ Compose запускает:
 
 ```text
 avito-manager -> Next.js app
-avito-worker  -> online/reviews/messages/reports worker
+avito-worker  -> online/reviews/messages/reports/orders worker
 ```
 
 Проброс:

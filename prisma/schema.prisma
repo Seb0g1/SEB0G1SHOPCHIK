@@ -11,6 +11,8 @@ model ProductTemplate {
   id                    String           @id @default(cuid())
   title                 String
   brand                 String?
+  supplierId            String?
+  supplier              Supplier?        @relation("ProductTemplateSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
   category              String           @default("Личные вещи")
   goodsType             String           @default("Одежда, обувь, аксессуары")
   productType           String           @default("Футболки и топы")
@@ -32,12 +34,17 @@ model ProductTemplate {
   photos                PhotoAsset[]
   colorGroups           ProductColorGroup[]
   publicationRuns       PublicationRun[]
+  customerOrders        CustomerOrder[]
+
+  @@index([supplierId])
 }
 
 model ProductColorGroup {
   id              String          @id @default(cuid())
   productId       String
   product         ProductTemplate @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplierId      String?
+  supplier        Supplier?       @relation("ProductColorGroupSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
   color           String
   avitoColorValue String?
   basePrice       Int             @default(0)
@@ -49,6 +56,7 @@ model ProductColorGroup {
   updatedAt       DateTime        @updatedAt
 
   @@unique([productId, color])
+  @@index([supplierId])
   @@index([productId, sortOrder])
 }
 
@@ -56,6 +64,7 @@ model ProductVariant {
   id                String          @id @default(cuid())
   productId         String
   product           ProductTemplate @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerOrders    CustomerOrder[]
   color             String
   size              String
   sku               String          @unique
@@ -73,6 +82,76 @@ model ProductVariant {
 
   @@unique([productId, color, size])
   @@index([productId, color])
+}
+
+model Supplier {
+  id                     String              @id @default(cuid())
+  name                   String
+  contactName            String?
+  phone                  String?
+  whatsapp               String?
+  telegram               String?
+  website                String?
+  notes                  String              @default("")
+  defaultMessageTemplate String              @default("")
+  active                 Boolean             @default(true)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  productTemplates       ProductTemplate[]   @relation("ProductTemplateSupplier")
+  colorGroups            ProductColorGroup[] @relation("ProductColorGroupSupplier")
+  supplierTasks          SupplierTask[]
+
+  @@index([active, name])
+}
+
+model CustomerOrder {
+  id             String           @id @default(cuid())
+  avitoOrderId   String           @unique
+  avitoItemId    String?
+  avitoChatId    String?
+  buyerName      String?
+  buyerPhone     String?
+  itemTitle      String?
+  color          String?
+  size           String?
+  quantity       Int              @default(1)
+  price          Int              @default(0)
+  status         String           @default("NEW")
+  deliveryText   String?
+  productId      String?
+  product        ProductTemplate? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId      String?
+  variant        ProductVariant?  @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  rawJson        String           @default("{}")
+  avitoCreatedAt DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  supplierTask   SupplierTask?
+
+  @@index([status, avitoCreatedAt])
+  @@index([productId])
+  @@index([variantId])
+  @@index([avitoItemId])
+}
+
+model SupplierTask {
+  id               String        @id @default(cuid())
+  orderId          String        @unique
+  order            CustomerOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  supplierId       String?
+  supplier         Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  generatedMessage String        @default("")
+  status           String        @default("NEW")
+  notes            String        @default("")
+  copiedAt         DateTime?
+  contactedAt      DateTime?
+  doneAt           DateTime?
+  error            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([supplierId, status])
+  @@index([status])
 }
 
 model BulkPriceOperation {
@@ -208,6 +287,7 @@ model AutomationState {
   messagesEnabled    Boolean   @default(false)
   messageAutoRepliesEnabled Boolean @default(false)
   reportsEnabled     Boolean   @default(true)
+  ordersEnabled      Boolean   @default(true)
   status             String    @default("IDLE")
   lastOnlinePingAt   DateTime?
   lastReviewsSyncAt  DateTime?
@@ -215,6 +295,7 @@ model AutomationState {
   lastMessagesSyncAt DateTime?
   lastMessageRulesAt DateTime?
   lastReportsSyncAt DateTime?
+  lastOrdersSyncAt   DateTime?
   lastError          String?
   capabilitiesJson   String    @default("{}")
   updatedAt          DateTime  @updatedAt

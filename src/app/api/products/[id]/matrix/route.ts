@@ -8,6 +8,7 @@ const schema = z.object({
       z.object({
         id: z.string().optional(),
         color: z.string().min(1),
+        supplierId: z.string().nullable().optional(),
         avitoColorValue: z.string().nullable().optional(),
         basePrice: z.coerce.number().int().min(0),
         defaultStockQty: z.coerce.number().int().min(0),

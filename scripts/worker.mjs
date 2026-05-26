@@ -3,17 +3,19 @@ const onlineInterval = toInterval(process.env.AVITO_WORKER_ONLINE_INTERVAL_SECON
 const reviewsInterval = toInterval(process.env.AVITO_WORKER_REVIEWS_INTERVAL_SECONDS, 180);
 const messagesInterval = toInterval(process.env.AVITO_WORKER_MESSAGES_INTERVAL_SECONDS, 45);
 const reportsInterval = toInterval(process.env.AVITO_WORKER_REPORTS_INTERVAL_SECONDS, 300);
+const ordersInterval = toInterval(process.env.AVITO_WORKER_ORDERS_INTERVAL_SECONDS, 120);
 
 let lastOnlineAt = 0;
 let lastReviewsAt = 0;
 let lastMessagesAt = 0;
 let lastReportsAt = 0;
+let lastOrdersAt = 0;
 
 console.log(`Avito worker started. App URL: ${appUrl}`);
 console.log(
   `Online: ${onlineInterval / 1000}s, reviews: ${reviewsInterval / 1000}s, messages: ${messagesInterval / 1000}s, reports: ${
     reportsInterval / 1000
-  }s`,
+  }s, orders: ${ordersInterval / 1000}s`,
 );
 
 while (true) {
@@ -38,6 +40,11 @@ while (true) {
   if (now - lastReportsAt >= reportsInterval) {
     lastReportsAt = now;
     await post("/api/automation/sync-reports", { force: false });
+  }
+
+  if (now - lastOrdersAt >= ordersInterval) {
+    lastOrdersAt = now;
+    await post("/api/automation/sync-orders", { force: false });
   }
 
   await sleep(1000);

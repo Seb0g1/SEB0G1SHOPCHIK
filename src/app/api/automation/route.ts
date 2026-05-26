@@ -10,6 +10,7 @@ const schema = z.object({
   messagesEnabled: z.boolean().optional(),
   messageAutoRepliesEnabled: z.boolean().optional(),
   reportsEnabled: z.boolean().optional(),
+  ordersEnabled: z.boolean().optional(),
 });
 
 export async function GET() {

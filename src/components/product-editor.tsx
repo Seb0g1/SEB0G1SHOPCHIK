@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ImagePlus, PackagePlus, Save, Send, Sparkles, UploadCloud } from "lucide-react";
-import type { ClientProduct } from "@/lib/client-types";
+import type { ClientProduct, ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
 import { Button, NumberField, PageHeader, SelectField, StatusPill, TextField, requestJson } from "@/components/ui-kit";
@@ -15,6 +15,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
   const [product, setProduct] = useState(initialProduct);
   const [tree, setTree] = useState<AvitoCategoryNode[]>([]);
   const [fields, setFields] = useState<AvitoCatalogField[]>([]);
+  const [suppliers, setSuppliers] = useState<ClientSupplier[]>([]);
   const [tab, setTab] = useState<Tab>("params");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -40,6 +41,10 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
   const categoryFields = fields.filter((field) => !isVariantField(field) && !isProductCoreField(field));
 
   useEffect(() => {
+    requestJson<{ suppliers: ClientSupplier[] }>("/api/suppliers")
+      .then((payload) => setSuppliers(payload.suppliers.filter((supplier) => supplier.active)))
+      .catch(() => setSuppliers([]));
+
     requestJson<{ data: AvitoCategoryNode[] }>("/api/avito/catalog/tree")
       .then((payload) => setTree(payload.data))
       .catch(() => setTree([]));
@@ -63,6 +68,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
         body: JSON.stringify({
           title: product.title,
           brand: product.brand,
+          supplierId: product.supplierId,
           basePrice: product.basePrice,
           description: product.description,
           generatedDescription: product.generatedDescription,
@@ -211,6 +217,12 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                     <TextField label="Название" value={product.title} onChange={(title) => setProduct({ ...product, title })} />
                     <TextField label="Бренд" value={product.brand ?? ""} onChange={(brand) => setProduct({ ...product, brand })} />
                     <NumberField label="Базовая цена" value={product.basePrice} onChange={(basePrice) => setProduct({ ...product, basePrice })} />
+                    <SupplierSelect
+                      label="Поставщик товара"
+                      value={product.supplierId ?? ""}
+                      suppliers={suppliers}
+                      onChange={(supplierId) => setProduct({ ...product, supplierId: supplierId || null })}
+                    />
                   </div>
                   <label className="block">
                     <span className="mb-1 block text-xs font-semibold text-moss">Категория Avito</span>
@@ -304,6 +316,28 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                       </Button>
                     </div>
                   </div>
+
+                  {product.colorGroups.length ? (
+                    <div className="rounded-md border border-line bg-canvas p-4">
+                      <p className="mb-3 font-semibold">Поставщики по цветам</p>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {product.colorGroups.map((group) => (
+                          <SupplierSelect
+                            key={group.id}
+                            label={`${group.avitoColorValue || group.color}`}
+                            value={group.supplierId ?? ""}
+                            suppliers={suppliers}
+                            onChange={(supplierId) =>
+                              setProduct({
+                                ...product,
+                                colorGroups: product.colorGroups.map((item) => (item.id === group.id ? { ...item, supplierId: supplierId || null } : item)),
+                              })
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="overflow-x-auto rounded-md border border-line">
                     <table className="min-w-[860px] w-full divide-y divide-line text-sm">
@@ -430,6 +464,32 @@ function Row({ label, value }: { label: string; value: number }) {
       <dt className="text-moss">{label}</dt>
       <dd className="font-semibold">{value}</dd>
     </div>
+  );
+}
+
+function SupplierSelect({
+  label,
+  value,
+  suppliers,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  suppliers: ClientSupplier[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-semibold text-moss">{label}</span>
+      <select className="h-10 w-full rounded-md border-line bg-white text-sm" value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Поставщик не назначен</option>
+        {suppliers.map((supplier) => (
+          <option key={supplier.id} value={supplier.id}>
+            {supplier.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

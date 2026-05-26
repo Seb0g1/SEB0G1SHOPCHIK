@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "ProductTemplate" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "title" TEXT NOT NULL,
   "brand" TEXT,
+  "supplierId" TEXT,
   "category" TEXT NOT NULL DEFAULT 'Личные вещи',
   "goodsType" TEXT NOT NULL DEFAULT 'Одежда, обувь, аксессуары',
   "productType" TEXT NOT NULL DEFAULT 'Футболки и топы',
@@ -30,7 +31,8 @@ CREATE TABLE IF NOT EXISTS "ProductTemplate" (
   "lastApiSyncAt" DATETIME,
   "status" TEXT NOT NULL DEFAULT 'DRAFT',
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" DATETIME NOT NULL
+  "updatedAt" DATETIME NOT NULL,
+  CONSTRAINT "ProductTemplate_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Supplier" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS "ProductVariant" (
@@ -56,6 +58,7 @@ CREATE TABLE IF NOT EXISTS "ProductVariant" (
 CREATE TABLE IF NOT EXISTS "ProductColorGroup" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "productId" TEXT NOT NULL,
+  "supplierId" TEXT,
   "color" TEXT NOT NULL,
   "avitoColorValue" TEXT,
   "basePrice" INTEGER NOT NULL DEFAULT 0,
@@ -65,7 +68,64 @@ CREATE TABLE IF NOT EXISTS "ProductColorGroup" (
   "sortOrder" INTEGER NOT NULL DEFAULT 0,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL,
-  CONSTRAINT "ProductColorGroup_productId_fkey" FOREIGN KEY ("productId") REFERENCES "ProductTemplate" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT "ProductColorGroup_productId_fkey" FOREIGN KEY ("productId") REFERENCES "ProductTemplate" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "ProductColorGroup_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Supplier" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "Supplier" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "contactName" TEXT,
+  "phone" TEXT,
+  "whatsapp" TEXT,
+  "telegram" TEXT,
+  "website" TEXT,
+  "notes" TEXT NOT NULL DEFAULT '',
+  "defaultMessageTemplate" TEXT NOT NULL DEFAULT '',
+  "active" BOOLEAN NOT NULL DEFAULT 1,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "CustomerOrder" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "avitoOrderId" TEXT NOT NULL,
+  "avitoItemId" TEXT,
+  "avitoChatId" TEXT,
+  "buyerName" TEXT,
+  "buyerPhone" TEXT,
+  "itemTitle" TEXT,
+  "color" TEXT,
+  "size" TEXT,
+  "quantity" INTEGER NOT NULL DEFAULT 1,
+  "price" INTEGER NOT NULL DEFAULT 0,
+  "status" TEXT NOT NULL DEFAULT 'NEW',
+  "deliveryText" TEXT,
+  "productId" TEXT,
+  "variantId" TEXT,
+  "rawJson" TEXT NOT NULL DEFAULT '{}',
+  "avitoCreatedAt" DATETIME,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL,
+  CONSTRAINT "CustomerOrder_productId_fkey" FOREIGN KEY ("productId") REFERENCES "ProductTemplate" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT "CustomerOrder_variantId_fkey" FOREIGN KEY ("variantId") REFERENCES "ProductVariant" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "SupplierTask" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "orderId" TEXT NOT NULL,
+  "supplierId" TEXT,
+  "generatedMessage" TEXT NOT NULL DEFAULT '',
+  "status" TEXT NOT NULL DEFAULT 'NEW',
+  "notes" TEXT NOT NULL DEFAULT '',
+  "copiedAt" DATETIME,
+  "contactedAt" DATETIME,
+  "doneAt" DATETIME,
+  "error" TEXT,
+  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" DATETIME NOT NULL,
+  CONSTRAINT "SupplierTask_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "CustomerOrder" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT "SupplierTask_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Supplier" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS "PhotoAsset" (
@@ -174,6 +234,7 @@ CREATE TABLE IF NOT EXISTS "AutomationState" (
   "messagesEnabled" BOOLEAN NOT NULL DEFAULT 0,
   "messageAutoRepliesEnabled" BOOLEAN NOT NULL DEFAULT 0,
   "reportsEnabled" BOOLEAN NOT NULL DEFAULT 1,
+  "ordersEnabled" BOOLEAN NOT NULL DEFAULT 1,
   "status" TEXT NOT NULL DEFAULT 'IDLE',
   "lastOnlinePingAt" DATETIME,
   "lastReviewsSyncAt" DATETIME,
@@ -181,6 +242,7 @@ CREATE TABLE IF NOT EXISTS "AutomationState" (
   "lastMessagesSyncAt" DATETIME,
   "lastMessageRulesAt" DATETIME,
   "lastReportsSyncAt" DATETIME,
+  "lastOrdersSyncAt" DATETIME,
   "lastError" TEXT,
   "capabilitiesJson" TEXT NOT NULL DEFAULT '{}',
   "updatedAt" DATETIME NOT NULL
@@ -273,6 +335,15 @@ CREATE INDEX IF NOT EXISTS "ProductVariant_productId_color_idx" ON "ProductVaria
 CREATE UNIQUE INDEX IF NOT EXISTS "ProductVariant_productId_color_size_key" ON "ProductVariant"("productId", "color", "size");
 CREATE UNIQUE INDEX IF NOT EXISTS "ProductColorGroup_productId_color_key" ON "ProductColorGroup"("productId", "color");
 CREATE INDEX IF NOT EXISTS "ProductColorGroup_productId_sortOrder_idx" ON "ProductColorGroup"("productId", "sortOrder");
+CREATE INDEX IF NOT EXISTS "Supplier_active_name_idx" ON "Supplier"("active", "name");
+CREATE UNIQUE INDEX IF NOT EXISTS "CustomerOrder_avitoOrderId_key" ON "CustomerOrder"("avitoOrderId");
+CREATE INDEX IF NOT EXISTS "CustomerOrder_status_avitoCreatedAt_idx" ON "CustomerOrder"("status", "avitoCreatedAt");
+CREATE INDEX IF NOT EXISTS "CustomerOrder_productId_idx" ON "CustomerOrder"("productId");
+CREATE INDEX IF NOT EXISTS "CustomerOrder_variantId_idx" ON "CustomerOrder"("variantId");
+CREATE INDEX IF NOT EXISTS "CustomerOrder_avitoItemId_idx" ON "CustomerOrder"("avitoItemId");
+CREATE UNIQUE INDEX IF NOT EXISTS "SupplierTask_orderId_key" ON "SupplierTask"("orderId");
+CREATE INDEX IF NOT EXISTS "SupplierTask_supplierId_status_idx" ON "SupplierTask"("supplierId", "status");
+CREATE INDEX IF NOT EXISTS "SupplierTask_status_idx" ON "SupplierTask"("status");
 CREATE INDEX IF NOT EXISTS "PhotoAsset_productId_color_idx" ON "PhotoAsset"("productId", "color");
 CREATE UNIQUE INDEX IF NOT EXISTS "Review_avitoReviewId_key" ON "Review"("avitoReviewId");
 CREATE INDEX IF NOT EXISTS "Review_rating_status_idx" ON "Review"("rating", "status");
@@ -298,10 +369,14 @@ addColumnIfMissing(db, "ProductTemplate", "avitoCategoryName", '"avitoCategoryNa
 addColumnIfMissing(db, "ProductTemplate", "avitoFieldsJson", `"avitoFieldsJson" TEXT NOT NULL DEFAULT '{}'`);
 addColumnIfMissing(db, "ProductTemplate", "publicationErrorsJson", `"publicationErrorsJson" TEXT NOT NULL DEFAULT '[]'`);
 addColumnIfMissing(db, "ProductTemplate", "lastApiSyncAt", '"lastApiSyncAt" DATETIME');
+addColumnIfMissing(db, "ProductTemplate", "supplierId", '"supplierId" TEXT');
 addColumnIfMissing(db, "ProductVariant", "avitoFieldsJson", `"avitoFieldsJson" TEXT NOT NULL DEFAULT '{}'`);
 addColumnIfMissing(db, "ProductVariant", "needsSync", '"needsSync" BOOLEAN NOT NULL DEFAULT 0');
 addColumnIfMissing(db, "ProductVariant", "lastPriceSyncAt", '"lastPriceSyncAt" DATETIME');
 addColumnIfMissing(db, "ProductVariant", "lastStockSyncAt", '"lastStockSyncAt" DATETIME');
+addColumnIfMissing(db, "ProductColorGroup", "supplierId", '"supplierId" TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS "ProductTemplate_supplierId_idx" ON "ProductTemplate"("supplierId")');
+db.exec('CREATE INDEX IF NOT EXISTS "ProductColorGroup_supplierId_idx" ON "ProductColorGroup"("supplierId")');
 addColumnIfMissing(db, "AvitoSettings", "avitoUserId", '"avitoUserId" TEXT');
 addColumnIfMissing(db, "AvitoSettings", "autoloadReportEmail", '"autoloadReportEmail" TEXT');
 addColumnIfMissing(db, "AvitoSettings", "autoloadScheduleJson", `"autoloadScheduleJson" TEXT NOT NULL DEFAULT '[]'`);
@@ -313,10 +388,12 @@ addColumnIfMissing(db, "AutomationState", "reviewAutoSendEnabled", '"reviewAutoS
 addColumnIfMissing(db, "AutomationState", "messagesEnabled", '"messagesEnabled" BOOLEAN NOT NULL DEFAULT 0');
 addColumnIfMissing(db, "AutomationState", "messageAutoRepliesEnabled", '"messageAutoRepliesEnabled" BOOLEAN NOT NULL DEFAULT 0');
 addColumnIfMissing(db, "AutomationState", "reportsEnabled", '"reportsEnabled" BOOLEAN NOT NULL DEFAULT 1');
+addColumnIfMissing(db, "AutomationState", "ordersEnabled", '"ordersEnabled" BOOLEAN NOT NULL DEFAULT 1');
 addColumnIfMissing(db, "AutomationState", "lastReviewAutoSendAt", '"lastReviewAutoSendAt" DATETIME');
 addColumnIfMissing(db, "AutomationState", "lastMessagesSyncAt", '"lastMessagesSyncAt" DATETIME');
 addColumnIfMissing(db, "AutomationState", "lastMessageRulesAt", '"lastMessageRulesAt" DATETIME');
 addColumnIfMissing(db, "AutomationState", "lastReportsSyncAt", '"lastReportsSyncAt" DATETIME');
+addColumnIfMissing(db, "AutomationState", "lastOrdersSyncAt", '"lastOrdersSyncAt" DATETIME');
 
 seedDefaultReplyTemplates(db);
 backfillColorGroups(db);
@@ -454,8 +531,8 @@ function ensureAutomationState(database) {
     .prepare(
       `INSERT OR IGNORE INTO "AutomationState" (
         "id", "onlineEnabled", "reviewsEnabled", "draftsEnabled", "reviewAutoSendEnabled", "messagesEnabled",
-        "messageAutoRepliesEnabled", "reportsEnabled", "status", "capabilitiesJson", "updatedAt"
-      ) VALUES ('default', 0, 1, 1, 1, 0, 0, 1, 'IDLE', '{}', CURRENT_TIMESTAMP)`,
+        "messageAutoRepliesEnabled", "reportsEnabled", "ordersEnabled", "status", "capabilitiesJson", "updatedAt"
+      ) VALUES ('default', 0, 1, 1, 1, 0, 0, 1, 1, 'IDLE', '{}', CURRENT_TIMESTAMP)`,
     )
     .run();
 }

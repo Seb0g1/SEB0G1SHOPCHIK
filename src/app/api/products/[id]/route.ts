@@ -5,6 +5,7 @@ import { getProduct, updateProduct } from "@/lib/products";
 const updateProductSchema = z.object({
   title: z.string().min(2).optional(),
   brand: z.string().nullable().optional(),
+  supplierId: z.string().nullable().optional(),
   category: z.string().optional(),
   goodsType: z.string().optional(),
   productType: z.string().optional(),
@@ -39,6 +40,7 @@ const updateProductSchema = z.object({
       z.object({
         id: z.string().optional(),
         color: z.string(),
+        supplierId: z.string().nullable().optional(),
         avitoColorValue: z.string().nullable().optional(),
         basePrice: z.coerce.number().int().min(0),
         defaultStockQty: z.coerce.number().int().min(0),

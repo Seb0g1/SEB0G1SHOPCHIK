@@ -1,9 +1,11 @@
-import type { ClientAvitoSettings, ClientProduct } from "@/lib/client-types";
+import type { ClientAvitoSettings, ClientCustomerOrder, ClientProduct, ClientSupplier, ClientSupplierTask } from "@/lib/client-types";
 
 type ProductRecord = {
   id: string;
   title: string;
   brand: string | null;
+  supplierId: string | null;
+  supplier?: SupplierRecord | null;
   category: string;
   goodsType: string;
   productType: string;
@@ -40,6 +42,7 @@ type ProductRecord = {
   colorGroups: Array<{
     id: string;
     productId: string;
+    supplierId: string | null;
     color: string;
     avitoColorValue: string | null;
     basePrice: number;
@@ -75,9 +78,25 @@ type ProductRecord = {
   }>;
 };
 
+type SupplierRecord = {
+  id: string;
+  name: string;
+  contactName: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  telegram: string | null;
+  website: string | null;
+  notes: string;
+  defaultMessageTemplate: string;
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export function toClientProduct(product: ProductRecord): ClientProduct {
   return {
     ...product,
+    supplier: product.supplier ? toClientSupplier(product.supplier) : null,
     avitoFields: parseJsonObject(product.avitoFieldsJson),
     publicationErrors: parseJsonList(product.publicationErrorsJson),
     lastApiSyncAt: product.lastApiSyncAt?.toISOString() ?? null,
@@ -110,6 +129,96 @@ export function toClientProduct(product: ProductRecord): ClientProduct {
       warnings: parseJsonList(run.warningsJson),
       rawReport: run.rawReport,
     })),
+  };
+}
+
+export function toClientSupplier(supplier: SupplierRecord): ClientSupplier {
+  return {
+    ...supplier,
+    createdAt: supplier.createdAt.toISOString(),
+    updatedAt: supplier.updatedAt.toISOString(),
+  };
+}
+
+export function toClientSupplierTask(
+  task: {
+    id: string;
+    orderId: string;
+    supplierId: string | null;
+    generatedMessage: string;
+    status: string;
+    notes: string;
+    copiedAt: Date | null;
+    contactedAt: Date | null;
+    doneAt: Date | null;
+    error: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    supplier?: SupplierRecord | null;
+  },
+): ClientSupplierTask {
+  return {
+    id: task.id,
+    orderId: task.orderId,
+    supplierId: task.supplierId,
+    generatedMessage: task.generatedMessage,
+    status: task.status,
+    notes: task.notes,
+    copiedAt: task.copiedAt?.toISOString() ?? null,
+    contactedAt: task.contactedAt?.toISOString() ?? null,
+    doneAt: task.doneAt?.toISOString() ?? null,
+    error: task.error,
+    createdAt: task.createdAt.toISOString(),
+    updatedAt: task.updatedAt.toISOString(),
+    supplier: task.supplier ? toClientSupplier(task.supplier) : null,
+  };
+}
+
+export function toClientCustomerOrder(order: {
+  id: string;
+  avitoOrderId: string;
+  avitoItemId: string | null;
+  avitoChatId: string | null;
+  buyerName: string | null;
+  buyerPhone: string | null;
+  itemTitle: string | null;
+  color: string | null;
+  size: string | null;
+  quantity: number;
+  price: number;
+  status: string;
+  deliveryText: string | null;
+  productId: string | null;
+  variantId: string | null;
+  avitoCreatedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  product?: { id: string; title: string; brand: string | null } | null;
+  variant?: { id: string; sku: string; color: string; size: string; price: number } | null;
+  supplierTask?: (Parameters<typeof toClientSupplierTask>[0] & { supplier?: SupplierRecord | null }) | null;
+}): ClientCustomerOrder {
+  return {
+    id: order.id,
+    avitoOrderId: order.avitoOrderId,
+    avitoItemId: order.avitoItemId,
+    avitoChatId: order.avitoChatId,
+    buyerName: order.buyerName,
+    buyerPhone: order.buyerPhone,
+    itemTitle: order.itemTitle,
+    color: order.color,
+    size: order.size,
+    quantity: order.quantity,
+    price: order.price,
+    status: order.status,
+    deliveryText: order.deliveryText,
+    productId: order.productId,
+    variantId: order.variantId,
+    avitoCreatedAt: order.avitoCreatedAt?.toISOString() ?? null,
+    createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt.toISOString(),
+    product: order.product ?? null,
+    variant: order.variant ?? null,
+    supplierTask: order.supplierTask ? toClientSupplierTask(order.supplierTask) : null,
   };
 }
 

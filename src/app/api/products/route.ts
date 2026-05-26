@@ -5,6 +5,7 @@ import { createProduct, listProducts } from "@/lib/products";
 const createProductSchema = z.object({
   title: z.string().min(2),
   brand: z.string().optional(),
+  supplierId: z.string().nullable().optional(),
   basePrice: z.coerce.number().int().min(0),
   color: z.string().optional(),
   sizes: z.array(z.string()).optional(),
@@ -16,6 +17,7 @@ const createProductSchema = z.object({
     .array(
       z.object({
         color: z.string(),
+        supplierId: z.string().nullable().optional(),
         avitoColorValue: z.string().nullable().optional(),
         basePrice: z.coerce.number().int().min(0).optional(),
         defaultStockQty: z.coerce.number().int().min(0).optional(),

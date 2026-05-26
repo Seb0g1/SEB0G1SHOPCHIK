@@ -24,11 +24,15 @@ ENV AVITO_WORKER_ONLINE_INTERVAL_SECONDS=45
 ENV AVITO_WORKER_REVIEWS_INTERVAL_SECONDS=180
 ENV AVITO_WORKER_MESSAGES_INTERVAL_SECONDS=45
 ENV AVITO_WORKER_REPORTS_INTERVAL_SECONDS=300
+ENV AVITO_ORDERS_LIST_PATH=/order-management/1/orders
+ENV AVITO_ORDER_DETAIL_PATH=/order-management/1/orders/{orderId}
+ENV AVITO_WORKER_ORDERS_INTERVAL_SECONDS=120
 ENV SETTINGS_ENCRYPTION_KEY=docker-build-placeholder
 ENV OPENAI_API_KEY=
 ENV OPENAI_MODEL=gpt-4.1-mini
 RUN apt-get update \
   && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && mkdir -p /app/data/uploads \
   && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps

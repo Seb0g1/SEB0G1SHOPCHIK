@@ -4,6 +4,7 @@ import { createBulkProduct } from "@/lib/products";
 
 const colorGroupSchema = z.object({
   color: z.string().min(1),
+  supplierId: z.string().nullable().optional(),
   avitoColorValue: z.string().nullable().optional(),
   basePrice: z.coerce.number().int().min(0).optional(),
   defaultStockQty: z.coerce.number().int().min(0).optional(),
@@ -15,6 +16,7 @@ const colorGroupSchema = z.object({
 const schema = z.object({
   title: z.string().min(2),
   brand: z.string().optional(),
+  supplierId: z.string().nullable().optional(),
   basePrice: z.coerce.number().int().min(0),
   avitoCategorySlug: z.string().nullable().optional(),
   avitoCategoryName: z.string().nullable().optional(),

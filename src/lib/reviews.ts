@@ -65,6 +65,7 @@ type AutomationRecord = {
   messagesEnabled: boolean;
   messageAutoRepliesEnabled: boolean;
   reportsEnabled: boolean;
+  ordersEnabled: boolean;
   status: string;
   lastOnlinePingAt: Date | null;
   lastReviewsSyncAt: Date | null;
@@ -72,6 +73,7 @@ type AutomationRecord = {
   lastMessagesSyncAt: Date | null;
   lastMessageRulesAt: Date | null;
   lastReportsSyncAt: Date | null;
+  lastOrdersSyncAt: Date | null;
   lastError: string | null;
   capabilitiesJson: string;
   updatedAt: Date;
@@ -115,6 +117,7 @@ export async function updateAutomationState(input: {
   messagesEnabled?: boolean;
   messageAutoRepliesEnabled?: boolean;
   reportsEnabled?: boolean;
+  ordersEnabled?: boolean;
 }) {
   const state = await prisma.automationState.upsert({
     where: { id: "default" },
@@ -127,6 +130,7 @@ export async function updateAutomationState(input: {
       messagesEnabled: input.messagesEnabled ?? false,
       messageAutoRepliesEnabled: input.messageAutoRepliesEnabled ?? false,
       reportsEnabled: input.reportsEnabled ?? true,
+      ordersEnabled: input.ordersEnabled ?? true,
     },
     update: {
       ...(input.onlineEnabled !== undefined ? { onlineEnabled: input.onlineEnabled } : {}),
@@ -136,6 +140,7 @@ export async function updateAutomationState(input: {
       ...(input.messagesEnabled !== undefined ? { messagesEnabled: input.messagesEnabled } : {}),
       ...(input.messageAutoRepliesEnabled !== undefined ? { messageAutoRepliesEnabled: input.messageAutoRepliesEnabled } : {}),
       ...(input.reportsEnabled !== undefined ? { reportsEnabled: input.reportsEnabled } : {}),
+      ...(input.ordersEnabled !== undefined ? { ordersEnabled: input.ordersEnabled } : {}),
     },
   });
   return toClientAutomationState(state);
@@ -149,6 +154,7 @@ export async function probeAutomationCapabilities() {
       reviews: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
       reviewReplies: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
       onlinePresence: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
+      orders: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
     };
     const state = await prisma.automationState.upsert({
       where: { id: "default" },
@@ -682,6 +688,7 @@ function toClientAutomationState(state: AutomationRecord) {
     messagesEnabled: state.messagesEnabled,
     messageAutoRepliesEnabled: state.messageAutoRepliesEnabled,
     reportsEnabled: state.reportsEnabled,
+    ordersEnabled: state.ordersEnabled,
     status: state.status,
     lastOnlinePingAt: state.lastOnlinePingAt?.toISOString() ?? null,
     lastReviewsSyncAt: state.lastReviewsSyncAt?.toISOString() ?? null,
@@ -689,6 +696,7 @@ function toClientAutomationState(state: AutomationRecord) {
     lastMessagesSyncAt: state.lastMessagesSyncAt?.toISOString() ?? null,
     lastMessageRulesAt: state.lastMessageRulesAt?.toISOString() ?? null,
     lastReportsSyncAt: state.lastReportsSyncAt?.toISOString() ?? null,
+    lastOrdersSyncAt: state.lastOrdersSyncAt?.toISOString() ?? null,
     lastError: state.lastError,
     capabilities: parseJsonObject(state.capabilitiesJson),
     updatedAt: state.updatedAt.toISOString(),

@@ -3,6 +3,7 @@ import { toClientProduct } from "@/lib/serializers";
 import { expandVariants, makeSku } from "@/lib/variants";
 
 export const productInclude = {
+  supplier: true,
   variants: { orderBy: [{ color: "asc" as const }, { sortOrder: "asc" as const }, { size: "asc" as const }] },
   colorGroups: { orderBy: [{ sortOrder: "asc" as const }, { color: "asc" as const }] },
   photos: { orderBy: [{ color: "asc" as const }, { sortOrder: "asc" as const }, { createdAt: "asc" as const }] },
@@ -28,6 +29,7 @@ export async function getProduct(id: string) {
 export async function createProduct(input: {
   title: string;
   brand?: string;
+  supplierId?: string | null;
   basePrice: number;
   color?: string;
   sizes?: string[];
@@ -37,6 +39,7 @@ export async function createProduct(input: {
   avitoFields?: Record<string, string>;
   colorGroups?: Array<{
     color: string;
+    supplierId?: string | null;
     avitoColorValue?: string | null;
     basePrice?: number;
     defaultStockQty?: number;
@@ -49,6 +52,7 @@ export async function createProduct(input: {
     data: {
       title: input.title.trim(),
       brand: input.brand?.trim() || null,
+      supplierId: input.supplierId?.trim() || null,
       basePrice: Math.max(0, Math.round(input.basePrice)),
       avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
       avitoCategoryName: input.avitoCategoryName?.trim() || null,
@@ -80,6 +84,7 @@ export async function updateProduct(
   input: {
     title?: string;
     brand?: string | null;
+    supplierId?: string | null;
     category?: string;
     goodsType?: string;
     productType?: string;
@@ -109,6 +114,7 @@ export async function updateProduct(
     colorGroups?: Array<{
       id?: string;
       color: string;
+      supplierId?: string | null;
       avitoColorValue?: string | null;
       basePrice: number;
       defaultStockQty: number;
@@ -121,6 +127,7 @@ export async function updateProduct(
   const data = {
     ...(input.title !== undefined ? { title: input.title.trim() } : {}),
     ...(input.brand !== undefined ? { brand: input.brand?.trim() || null } : {}),
+    ...(input.supplierId !== undefined ? { supplierId: input.supplierId?.trim() || null } : {}),
     ...(input.category !== undefined ? { category: input.category.trim() } : {}),
     ...(input.goodsType !== undefined ? { goodsType: input.goodsType.trim() } : {}),
     ...(input.productType !== undefined ? { productType: input.productType.trim() } : {}),
@@ -168,12 +175,14 @@ export async function updateProduct(
 export async function createBulkProduct(input: {
   title: string;
   brand?: string;
+  supplierId?: string | null;
   basePrice: number;
   avitoCategorySlug?: string | null;
   avitoCategoryName?: string | null;
   avitoFields?: Record<string, string>;
   colorGroups: Array<{
     color: string;
+    supplierId?: string | null;
     avitoColorValue?: string | null;
     basePrice?: number;
     defaultStockQty?: number;
@@ -186,6 +195,7 @@ export async function createBulkProduct(input: {
     data: {
       title: input.title.trim(),
       brand: input.brand?.trim() || null,
+      supplierId: input.supplierId?.trim() || null,
       basePrice: Math.max(0, Math.round(input.basePrice)),
       avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
       avitoCategoryName: input.avitoCategoryName?.trim() || null,
@@ -199,6 +209,7 @@ export async function createBulkProduct(input: {
     product.id,
     input.colorGroups.map((group, index) => ({
       color: group.color,
+      supplierId: group.supplierId ?? null,
       avitoColorValue: group.avitoColorValue ?? group.color,
       basePrice: group.basePrice ?? product.basePrice,
       defaultStockQty: group.defaultStockQty ?? 1,
@@ -277,6 +288,7 @@ export async function upsertColorGroups(
   groups: Array<{
     id?: string;
     color: string;
+    supplierId?: string | null;
     avitoColorValue?: string | null;
     basePrice?: number;
     defaultStockQty?: number;
@@ -292,6 +304,7 @@ export async function upsertColorGroups(
       where: { productId_color: { productId, color } },
       create: {
         productId,
+        supplierId: group.supplierId?.trim() || null,
         color,
         avitoColorValue: group.avitoColorValue?.trim() || color,
         basePrice: Math.max(0, Math.round(group.basePrice ?? 0)),
@@ -301,6 +314,7 @@ export async function upsertColorGroups(
         sortOrder: group.sortOrder ?? index,
       },
       update: {
+        supplierId: group.supplierId?.trim() || null,
         avitoColorValue: group.avitoColorValue?.trim() || color,
         basePrice: Math.max(0, Math.round(group.basePrice ?? 0)),
         defaultStockQty: Math.max(0, Math.round(group.defaultStockQty ?? 1)),

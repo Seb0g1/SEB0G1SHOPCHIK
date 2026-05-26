@@ -1,12 +1,12 @@
 "use client";
 
-import { Activity, CheckCircle2, Clock3, MessageCircle, RefreshCw, ShieldAlert, Wifi } from "lucide-react";
+import { Activity, CheckCircle2, Clock3, MessageCircle, RefreshCw, ShieldAlert, ShoppingBag, Wifi } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import type { ClientAutomationState } from "@/lib/client-types";
 import { Button, PageHeader, requestJson } from "@/components/ui-kit";
 
-type ActionName = "probe" | "online-ping" | "sync-reviews" | "sync-messages" | "process-message-rules" | "sync-reports";
+type ActionName = "probe" | "online-ping" | "sync-reviews" | "sync-messages" | "process-message-rules" | "sync-reports" | "sync-orders";
 
 export function AutomationPage({ initialAutomation }: { initialAutomation: ClientAutomationState }) {
   const [automation, setAutomation] = useState(initialAutomation);
@@ -43,6 +43,7 @@ export function AutomationPage({ initialAutomation }: { initialAutomation: Clien
         drafts?: number;
         autoSent?: number;
         sent?: number;
+        tasks?: number;
         reports?: unknown[];
         message?: string;
       }>(endpoint, { method: "POST", body: JSON.stringify({ force: true }) });
@@ -80,11 +81,12 @@ export function AutomationPage({ initialAutomation }: { initialAutomation: Clien
         }
       />
       <div className="space-y-4 p-4 xl:p-6">
-        <div className="grid gap-3 lg:grid-cols-4">
+        <div className="grid gap-3 lg:grid-cols-5">
           <StatusCard icon={<Activity className="h-5 w-5" />} label="Worker" value={automation.status} />
           <StatusCard icon={<Wifi className="h-5 w-5" />} label="Online" value={formatDate(automation.lastOnlinePingAt, "нет ping")} />
           <StatusCard icon={<MessageCircle className="h-5 w-5" />} label="Сообщения" value={formatDate(automation.lastMessagesSyncAt, "нет sync")} />
           <StatusCard icon={<Clock3 className="h-5 w-5" />} label="Отчеты" value={formatDate(automation.lastReportsSyncAt, "нет sync")} />
+          <StatusCard icon={<ShoppingBag className="h-5 w-5" />} label="Заказы" value={formatDate(automation.lastOrdersSyncAt, "нет sync")} />
         </div>
 
         <section className="grid gap-4 rounded-md border border-line bg-white p-5 shadow-panel lg:grid-cols-3">
@@ -95,6 +97,7 @@ export function AutomationPage({ initialAutomation }: { initialAutomation: Clien
           <Toggle checked={automation.messagesEnabled} label="Синхронизировать сообщения" hint="Получает чаты и сообщения через Messenger API." onChange={(messagesEnabled) => patch({ messagesEnabled })} />
           <Toggle checked={automation.messageAutoRepliesEnabled} label="Автоответы в чатах" hint="Включенные правила отвечают по ключевым словам с антидублем." onChange={(messageAutoRepliesEnabled) => patch({ messageAutoRepliesEnabled })} />
           <Toggle checked={automation.reportsEnabled} label="Отчеты Autoload" hint="Worker подтягивает отчеты публикации и ошибки Avito." onChange={(reportsEnabled) => patch({ reportsEnabled })} />
+          <Toggle checked={automation.ordersEnabled} label="Синхронизировать заказы" hint="Worker получает заказы через официальный Orders API и создает задачи поставщику." onChange={(ordersEnabled) => patch({ ordersEnabled })} />
         </section>
 
         <section className="rounded-md border border-line bg-white p-5 shadow-panel">
@@ -106,6 +109,7 @@ export function AutomationPage({ initialAutomation }: { initialAutomation: Clien
             <Button tone="secondary" busy={busy === "sync-messages"} onClick={() => action("sync-messages")}>Синхронизировать сообщения</Button>
             <Button tone="secondary" busy={busy === "process-message-rules"} onClick={() => action("process-message-rules")}>Запустить правила чата</Button>
             <Button tone="secondary" busy={busy === "sync-reports"} onClick={() => action("sync-reports")}>Синхронизировать отчеты</Button>
+            <Button tone="secondary" busy={busy === "sync-orders"} onClick={() => action("sync-orders")}>Синхронизировать заказы</Button>
           </div>
         </section>
 
@@ -118,7 +122,7 @@ export function AutomationPage({ initialAutomation }: { initialAutomation: Clien
             <h2 className="text-lg font-semibold">Capabilities Avito API</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {["profile", "autoloadProfile", "autoloadReports", "reviews", "reviewReplies", "onlinePresence", "messenger"].map((key) => (
+            {["profile", "autoloadProfile", "autoloadReports", "reviews", "reviewReplies", "onlinePresence", "messenger", "orders"].map((key) => (
               <Capability key={key} name={key} value={capabilities[key]} />
             ))}
           </div>
@@ -131,6 +135,7 @@ export function AutomationPage({ initialAutomation }: { initialAutomation: Clien
             <EnvLine name="AVITO_WORKER_REVIEWS_INTERVAL_SECONDS" value="180" />
             <EnvLine name="AVITO_WORKER_MESSAGES_INTERVAL_SECONDS" value="45" />
             <EnvLine name="AVITO_WORKER_REPORTS_INTERVAL_SECONDS" value="300" />
+            <EnvLine name="AVITO_WORKER_ORDERS_INTERVAL_SECONDS" value="120" />
           </div>
         </section>
       </div>
@@ -138,11 +143,12 @@ export function AutomationPage({ initialAutomation }: { initialAutomation: Clien
   );
 }
 
-function buildActionMessage(name: ActionName, result: { synced?: number; drafts?: number; autoSent?: number; sent?: number; reports?: unknown[]; message?: string }) {
+function buildActionMessage(name: ActionName, result: { synced?: number; drafts?: number; autoSent?: number; sent?: number; tasks?: number; reports?: unknown[]; message?: string }) {
   if (name === "sync-reviews") return `Отзывы: ${result.synced ?? 0}, черновики: ${result.drafts ?? 0}, авто: ${result.autoSent ?? 0}`;
   if (name === "sync-messages") return `Сообщения: ${result.synced ?? 0}`;
   if (name === "process-message-rules") return `Автоответы: ${result.sent ?? 0}`;
   if (name === "sync-reports") return `Отчеты: ${result.reports?.length ?? 0}`;
+  if (name === "sync-orders") return `Заказы: ${result.synced ?? 0}, задачи поставщику: ${result.tasks ?? 0}`;
   return result.message || "Готово.";
 }
 
