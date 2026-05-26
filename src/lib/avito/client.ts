@@ -23,6 +23,7 @@ export class AvitoApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly payload: unknown,
+    public readonly endpoint?: string,
   ) {
     super(message);
   }
@@ -56,7 +57,7 @@ export class AvitoClient {
 
     const payload = (await safeJson(response)) as Partial<TokenResponse>;
     if (!response.ok || !payload.access_token) {
-      throw new AvitoApiError("Avito OAuth token request failed.", response.status, payload);
+      throw new AvitoApiError("Avito OAuth token request failed.", response.status, payload, "/token");
     }
 
     cachedToken = {
@@ -69,7 +70,8 @@ export class AvitoClient {
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = await this.getAccessToken();
-    const response = await fetch(`${this.baseUrl}${path.startsWith("/") ? "" : "/"}${path}`, {
+    const endpoint = `${this.baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
+    const response = await fetch(endpoint, {
       ...init,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -80,7 +82,7 @@ export class AvitoClient {
 
     const payload = await safeJson(response);
     if (!response.ok) {
-      throw new AvitoApiError("Avito API request failed.", response.status, payload);
+      throw new AvitoApiError("Avito API request failed.", response.status, payload, endpoint);
     }
     return payload as T;
   }
@@ -98,7 +100,7 @@ export class AvitoClient {
 
     const payload = await safeJson(response);
     if (!response.ok) {
-      throw new AvitoApiError("Avito API request failed.", response.status, payload);
+      throw new AvitoApiError("Avito API request failed.", response.status, payload, url);
     }
     return payload as T;
   }
@@ -325,6 +327,7 @@ type CapabilityProbeResult = {
   available: boolean;
   status: string | number;
   message?: string;
+  endpoint?: string;
   payload?: unknown;
 };
 
@@ -338,6 +341,7 @@ async function probeCapability(action: () => Promise<unknown>): Promise<Capabili
         available: false,
         status: error.status || "not_configured",
         message: explainAvitoError(error),
+        endpoint: error.endpoint,
         payload: error.payload,
       };
     }
@@ -352,7 +356,7 @@ async function probeCapability(action: () => Promise<unknown>): Promise<Capabili
 function configuredPath(envName: string, fallback: string, values: Record<string, string>): string {
   const raw = process.env[envName];
   if (raw !== undefined && raw.trim() === "") {
-    throw new AvitoApiError(`${envName} is not configured.`, 0, { code: "endpoint_not_configured" });
+    throw new AvitoApiError(`${envName} is not configured.`, 0, { code: "endpoint_not_configured", envName }, envName);
   }
 
   return replacePathVariables(raw || fallback, values);
@@ -391,10 +395,11 @@ function normalizeAutoloadSchedule(schedule?: unknown[]): unknown[] {
 }
 
 export function explainAvitoError(error: AvitoApiError): string {
-  if (error.status === 0) return "Endpoint Avito API не настроен в .env.";
-  if (error.status === 401) return "Avito API отклонил OAuth-токен. Проверьте Client ID и Client Secret.";
-  if (error.status === 403) return "Avito API недоступен для этого приложения или тарифа.";
-  if (error.status === 404) return "Endpoint Avito API не найден. Проверьте путь в API catalog и .env.";
-  if (error.status === 429) return "Avito API ограничил частоту запросов. Worker продолжит позже.";
+  const endpoint = error.endpoint ? ` Путь: ${error.endpoint}.` : "";
+  if (error.status === 0) return `Endpoint Avito API не настроен в .env.${endpoint}`;
+  if (error.status === 401) return `Avito API отклонил OAuth-токен. Это не API key, а OAuth client_id/client_secret. Проверьте Client ID и Client Secret.${endpoint}`;
+  if (error.status === 403) return `Avito API недоступен для этого приложения, аккаунта или тарифа.${endpoint}`;
+  if (error.status === 404) return `Avito вернул 404 по конкретному методу API. Это значит, что путь не совпадает с вашим Swagger/API catalog или раздел не подключен к приложению.${endpoint}`;
+  if (error.status === 429) return `Avito API ограничил частоту запросов. Worker продолжит позже.${endpoint}`;
   return error.message || "Ошибка Avito API.";
 }

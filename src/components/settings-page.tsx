@@ -140,14 +140,17 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
 }
 
 function CapabilityLine({ label, value }: { label: string; value: unknown }) {
-  const item = typeof value === "object" && value ? (value as { available?: boolean; status?: string | number }) : null;
+  const item = typeof value === "object" && value ? (value as { available?: boolean; status?: string | number; message?: string }) : null;
   return (
-    <p className="flex items-center justify-between gap-3">
-      <span>{label}</span>
-      <span className={item?.available ? "font-semibold text-emerald-700" : "font-semibold text-zinc-600"}>
-        {item ? (item.available ? "доступно" : item.status || "нет доступа") : "не проверено"}
-      </span>
-    </p>
+    <div className="border-b border-line pb-2 last:border-b-0">
+      <p className="flex items-center justify-between gap-3">
+        <span>{label}</span>
+        <span className={item?.available ? "font-semibold text-emerald-700" : "font-semibold text-zinc-600"}>
+          {item ? (item.available ? "доступно" : item.status || "нет доступа") : "не проверено"}
+        </span>
+      </p>
+      {item?.message ? <p className="mt-1 text-xs leading-5 text-zinc-600">{item.message}</p> : null}
+    </div>
   );
 }
 
