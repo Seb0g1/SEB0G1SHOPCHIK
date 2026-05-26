@@ -59,6 +59,7 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/templates ./templates
 RUN mkdir -p /app/data/uploads
 EXPOSE 4317
 CMD ["npm", "run", "start"]
