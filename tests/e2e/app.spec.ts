@@ -30,6 +30,11 @@ test("creates product through the modern Avito matrix wizard", async ({ page }) 
   await expect(page.getByText("активных объявлений будет отправлено в Avito")).toBeVisible();
   await page.getByRole("button", { name: /Создать \d+ объявлений/ }).click();
   await expect(page.getByRole("button", { name: "Проверить и отправить" })).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Скачать Excel для Авито" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/seb0g1shopchik-avito-products-\d{4}-\d{2}-\d{2}\.xlsx/);
   await page.getByRole("button", { name: "Матрица" }).click();
   await expect(page.getByText("AV-", { exact: false }).first()).toBeVisible();
 });

@@ -9,6 +9,7 @@ import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField
 import { describePublicationReportStatus } from "@/lib/publication-status";
 import { Button, NumberField, PageHeader, SelectField, StatusPill, TextField, requestJson } from "@/components/ui-kit";
 import { AvitoFieldControl, DynamicFields, LinkedSizePicker } from "@/components/product-wizard";
+import { ExcelDownloadButton } from "@/components/excel-download-button";
 
 type Tab = "params" | "photos" | "variants" | "description" | "publication";
 
@@ -183,6 +184,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
         actions={
           <>
             <StatusPill status={product.status} />
+            <ExcelDownloadButton productIds={[product.id]} label="Скачать Excel для Авито" />
             <Button tone="secondary" busy={busy === "save"} onClick={saveProduct}>
               <Save className="h-4 w-4" />
               Сохранить

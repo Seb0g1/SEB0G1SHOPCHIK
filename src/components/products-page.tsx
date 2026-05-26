@@ -5,6 +5,7 @@ import { Filter, PackagePlus, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ClientProduct } from "@/lib/client-types";
 import { Button, EmptyState, PageHeader, SelectField, StatusPill, formatMoney, requestJson } from "@/components/ui-kit";
+import { ExcelDownloadButton } from "@/components/excel-download-button";
 
 const filters = [
   { id: "all", label: "Все" },
@@ -71,12 +72,15 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
         eyebrow="Каталог"
         title="Каталог товаров Avito"
         actions={
-          <Link href="/products/new">
-            <Button>
-              <PackagePlus className="h-4 w-4" />
-              Новый товар
-            </Button>
-          </Link>
+          <>
+            <ExcelDownloadButton label="Скачать Excel каталога" />
+            <Link href="/products/new">
+              <Button>
+                <PackagePlus className="h-4 w-4" />
+                Новый товар
+              </Button>
+            </Link>
+          </>
         }
       />
       <div className="space-y-4 p-4 xl:p-6">
@@ -131,17 +135,18 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
 
         {filtered.length ? (
           <div className="overflow-hidden rounded-md border border-line bg-white shadow-panel">
-            <div className="grid grid-cols-[1.6fr_1.1fr_.7fr_.6fr_.7fr] gap-3 border-b border-line bg-canvas px-4 py-3 text-xs font-semibold uppercase text-moss max-lg:hidden">
+            <div className="grid grid-cols-[1.5fr_1fr_.55fr_.55fr_.65fr_.65fr] gap-3 border-b border-line bg-canvas px-4 py-3 text-xs font-semibold uppercase text-moss max-lg:hidden">
               <span>Товар</span>
               <span>Категория и цвета</span>
               <span>Объявления</span>
               <span>Остаток</span>
               <span>Статус</span>
+              <span>Excel</span>
             </div>
             <div className="divide-y divide-line">
               {filtered.map((product) => (
-                <Link key={product.id} className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.6fr_1.1fr_.7fr_.6fr_.7fr] lg:items-center" href={`/products/${product.id}`}>
-                  <div className="flex min-w-0 items-center gap-3">
+                <div key={product.id} className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.5fr_1fr_.55fr_.55fr_.65fr_.65fr] lg:items-center">
+                  <Link className="flex min-w-0 items-center gap-3" href={`/products/${product.id}`}>
                     <ProductThumb product={product} />
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{product.title}</p>
@@ -149,8 +154,8 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
                         {product.brand || "Без бренда"} · от {formatMoney(minVariantPrice(product) || product.basePrice)} ₽ · {product.photos.length} фото
                       </p>
                     </div>
-                  </div>
-                  <div className="min-w-0">
+                  </Link>
+                  <Link className="min-w-0" href={`/products/${product.id}`}>
                     <p className="truncate text-sm text-moss">{product.avitoCategoryName || product.productType || "Категория не выбрана"}</p>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {productColors(product).slice(0, 5).map((color) => (
@@ -159,13 +164,14 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
                         </span>
                       ))}
                     </div>
-                  </div>
+                  </Link>
                   <p className="text-sm font-semibold">
                     {product.variants.filter((variant) => variant.stockQty > 0).length}/{product.variants.length}
                   </p>
                   <p className="text-sm font-semibold">{product.variants.reduce((sum, variant) => sum + variant.stockQty, 0)}</p>
                   <StatusPill status={product.status} />
-                </Link>
+                  <ExcelDownloadButton productIds={[product.id]} label="Excel" compact />
+                </div>
               ))}
             </div>
           </div>
