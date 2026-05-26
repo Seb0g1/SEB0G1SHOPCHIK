@@ -19,17 +19,29 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
       .catch(() => undefined);
   }, []);
 
+  async function readFreshSettings() {
+    const payload = await requestJson<{ settings: ClientAvitoSettings }>("/api/settings/avito");
+    setSettings(payload.settings);
+    return payload.settings;
+  }
+
   async function save() {
     setBusy("save");
     setMessage("");
     try {
-      const payload = await requestJson<{ settings: ClientAvitoSettings }>("/api/settings/avito", {
+      await requestJson<{ settings: ClientAvitoSettings }>("/api/settings/avito", {
         method: "PATCH",
         body: JSON.stringify({ ...settings, clientSecret: secretDraft }),
       });
-      setSettings(payload.settings);
+      const freshSettings = await readFreshSettings();
       setSecretDraft("");
-      setMessage(payload.settings.secretStatus === "invalid" ? "Настройки сохранены, но Client secret нужно вставить заново." : "Настройки сохранены.");
+      const secretText =
+        freshSettings.secretStatus === "invalid"
+          ? "Client secret есть в базе, но не читается текущим SETTINGS_ENCRYPTION_KEY."
+          : freshSettings.hasClientSecret
+            ? "Client secret сохранен и читается."
+            : "Client secret пока не заполнен.";
+      setMessage(`Настройки сохранены и перечитаны из базы. ${secretText}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить настройки");
     } finally {
@@ -42,7 +54,7 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
     setMessage("");
     try {
       const payload = await requestJson<{ ok: boolean; status: string; capabilities?: Record<string, unknown> }>("/api/settings/avito", { method: "POST" });
-      setSettings({ ...settings, capabilities: payload.capabilities ?? settings.capabilities });
+      await readFreshSettings();
       setMessage(`Avito API: ${payload.status}`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось проверить API");
@@ -120,6 +132,17 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
             <p className="mt-3 text-sm leading-6 text-moss">Если Avito принял только корень домена, для OAuth лучше добавить точный callback выше.</p>
           </div>
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <h2 className="font-semibold">Состояние сохранения</h2>
+            <div className="mt-3 space-y-2 text-sm">
+              <SettingsStatusLine label="Client ID" value={sourceLabel(settings.clientIdSource)} />
+              <SettingsStatusLine label="Client secret" value={secretSourceLabel(settings)} />
+              <SettingsStatusLine label="Последнее сохранение" value={formatSavedAt(settings.updatedAt)} />
+            </div>
+            <p className="mt-3 rounded-md bg-canvas p-3 text-xs leading-5 text-moss">
+              Поле Client secret очищается после сохранения специально: приложение хранит зашифрованный secret и показывает только статус чтения.
+            </p>
+          </div>
+          <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <h2 className="font-semibold">Capabilities</h2>
             <div className="mt-3 space-y-2 text-sm text-moss">
               <CapabilityLine label="Autoload" value={settings.capabilities.autoloadProfile ?? automation?.capabilities.autoloadProfile} />
@@ -137,6 +160,39 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
       </div>
     </>
   );
+}
+
+function SettingsStatusLine({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="flex items-center justify-between gap-3 border-b border-line pb-2 last:border-b-0">
+      <span className="text-moss">{label}</span>
+      <span className="text-right font-semibold text-ink">{value}</span>
+    </p>
+  );
+}
+
+function sourceLabel(source: ClientAvitoSettings["clientIdSource"]) {
+  if (source === "database") return "сохранен в базе";
+  if (source === "env") return "берется из .env";
+  return "не заполнен";
+}
+
+function secretSourceLabel(settings: ClientAvitoSettings) {
+  if (settings.secretStatus === "ok") return "сохранен в базе";
+  if (settings.secretStatus === "env") return "берется из .env";
+  if (settings.secretStatus === "invalid") return "не читается";
+  return "не заполнен";
+}
+
+function formatSavedAt(value: string | null) {
+  if (!value) return "еще не сохранено";
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function CapabilityLine({ label, value }: { label: string; value: unknown }) {

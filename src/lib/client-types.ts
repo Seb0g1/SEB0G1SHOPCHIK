@@ -143,6 +143,8 @@ export type ClientAvitoSettings = {
   clientId: string;
   hasClientSecret: boolean;
   secretStatus: "empty" | "ok" | "invalid" | "env";
+  clientIdSource: "database" | "env" | "empty";
+  secretSource: "database" | "env" | "empty" | "invalid";
   sellerLocation: string;
   contactName: string;
   phone: string;
@@ -154,6 +156,7 @@ export type ClientAvitoSettings = {
   autoloadReportEmail: string;
   autoloadScheduleJson: string;
   capabilities: Record<string, unknown>;
+  updatedAt: string | null;
 };
 
 export type ClientReplyTemplate = {

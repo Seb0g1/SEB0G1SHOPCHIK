@@ -101,12 +101,15 @@ function toClientSettingsWithSecretStatus(settings: Parameters<typeof toClientSe
   const envSecret = process.env.AVITO_CLIENT_SECRET || "";
   const client = toClientSettings(settings);
   const secretStatus = getSecretStatus(encrypted, decrypted, envSecret);
+  const secretSource: ReturnType<typeof toClientSettings>["secretSource"] =
+    secretStatus === "ok" ? "database" : secretStatus;
 
   return {
     ...client,
     clientId: client.clientId || process.env.AVITO_CLIENT_ID || "",
     hasClientSecret: secretStatus === "ok" || secretStatus === "env",
     secretStatus,
+    secretSource,
   };
 }
 

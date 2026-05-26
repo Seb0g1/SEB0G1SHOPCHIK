@@ -70,6 +70,14 @@ test("creates message keyword rules", async ({ page }) => {
   await page.goto("/messages");
   await expect(page.getByRole("heading", { name: "Сообщения" })).toBeVisible();
 });
+
+test("shows Avito settings persistence status", async ({ page }) => {
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "Настройки Avito API" })).toBeVisible();
+  await expect(page.getByText("Состояние сохранения")).toBeVisible();
+  await expect(page.getByText("Поле Client secret очищается после сохранения специально")).toBeVisible();
+});
+
 test("manages suppliers and opens orders queue", async ({ page }) => {
   await page.goto("/suppliers");
   await expect(page.getByRole("heading", { name: "Поставщики" })).toBeVisible();

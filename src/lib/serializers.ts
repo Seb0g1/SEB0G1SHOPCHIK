@@ -236,11 +236,17 @@ export function toClientSettings(settings: {
   autoloadReportEmail?: string | null;
   autoloadScheduleJson?: string | null;
   capabilitiesJson?: string | null;
+  updatedAt?: Date | null;
 } | null): ClientAvitoSettings {
+  const envClientId = process.env.AVITO_CLIENT_ID ?? "";
+  const envSecret = process.env.AVITO_CLIENT_SECRET ?? "";
+
   return {
-    clientId: settings?.clientId ?? process.env.AVITO_CLIENT_ID ?? "",
+    clientId: settings?.clientId ?? envClientId,
     hasClientSecret: Boolean(settings?.clientSecretEncrypted),
-    secretStatus: settings?.clientSecretEncrypted ? "ok" : process.env.AVITO_CLIENT_SECRET ? "env" : "empty",
+    secretStatus: settings?.clientSecretEncrypted ? "ok" : envSecret ? "env" : "empty",
+    clientIdSource: settings?.clientId ? "database" : envClientId ? "env" : "empty",
+    secretSource: settings?.clientSecretEncrypted ? "database" : envSecret ? "env" : "empty",
     sellerLocation: settings?.sellerLocation ?? "Москва",
     contactName: settings?.contactName ?? "",
     phone: settings?.phone ?? "",
@@ -252,6 +258,7 @@ export function toClientSettings(settings: {
     autoloadReportEmail: settings?.autoloadReportEmail ?? settings?.email ?? "",
     autoloadScheduleJson: settings?.autoloadScheduleJson ?? "[]",
     capabilities: parseUnknownJsonObject(settings?.capabilitiesJson ?? "{}"),
+    updatedAt: settings?.updatedAt?.toISOString() ?? null,
   };
 }
 

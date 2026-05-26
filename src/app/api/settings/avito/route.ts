@@ -28,7 +28,8 @@ export async function PATCH(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid settings payload", details: parsed.error.flatten() }, { status: 400 });
   }
-  return NextResponse.json({ settings: await upsertAvitoSettings(parsed.data) });
+  await upsertAvitoSettings(parsed.data);
+  return NextResponse.json({ settings: await getAvitoSettings() });
 }
 
 export async function POST() {
