@@ -1,4 +1,5 @@
-import { AvitoApiError, AvitoClient, explainAvitoError } from "@/lib/avito/client";
+import { AvitoApiError, explainAvitoError } from "@/lib/avito/client";
+import { createAvitoClient } from "@/lib/avito/factory";
 import { recordAutomationEvent } from "@/lib/autoload";
 import { prisma } from "@/lib/prisma";
 import { getAutomationState } from "@/lib/reviews";
@@ -64,7 +65,7 @@ export async function syncOrders(options: { force?: boolean } = {}) {
     return { ok: false, synced: 0, tasks: 0, state: updated, message: "Заполните Client ID и Client Secret." };
   }
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret, accountId: settings.avitoUserId });
+  const client = createAvitoClient(settings);
   try {
     const payload = await client.getOrders({ limit: 50, per_page: 50, page: 0 });
     const rawOrders = extractArray(payload, ["orders", "items", "data", "result", "results"]);

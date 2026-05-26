@@ -225,6 +225,9 @@ export function toClientCustomerOrder(order: {
 export function toClientSettings(settings: {
   clientId: string | null;
   clientSecretEncrypted: string | null;
+  accessTokenEncrypted?: string | null;
+  refreshTokenEncrypted?: string | null;
+  tokenExpiresAt?: Date | null;
   avitoUserId?: string | null;
   sellerLocation: string | null;
   contactName: string | null;
@@ -247,6 +250,8 @@ export function toClientSettings(settings: {
     secretStatus: settings?.clientSecretEncrypted ? "ok" : envSecret ? "env" : "empty",
     clientIdSource: settings?.clientId ? "database" : envClientId ? "env" : "empty",
     secretSource: settings?.clientSecretEncrypted ? "database" : envSecret ? "env" : "empty",
+    oauthConnected: Boolean(settings?.accessTokenEncrypted || settings?.refreshTokenEncrypted),
+    oauthExpiresAt: settings?.tokenExpiresAt?.toISOString() ?? null,
     sellerLocation: settings?.sellerLocation ?? "Москва",
     contactName: settings?.contactName ?? "",
     phone: settings?.phone ?? "",

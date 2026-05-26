@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getRawAvitoSettings } from "@/lib/settings";
-import { AvitoApiError, AvitoClient, explainAvitoError } from "@/lib/avito/client";
+import { AvitoApiError, explainAvitoError } from "@/lib/avito/client";
+import { createAvitoClient } from "@/lib/avito/factory";
 import { recordAutomationEvent } from "@/lib/autoload";
 
 type JsonObject = Record<string, unknown>;
@@ -103,7 +104,7 @@ export async function syncMessages(options: { force?: boolean } = {}) {
     return { ok: false, synced: 0, message: "Заполните Client ID и Client Secret." };
   }
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret, accountId: settings.avitoUserId });
+  const client = createAvitoClient(settings);
   try {
     const payload = await client.getChats({ limit: 50 });
     const chats = extractArray(payload, ["chats", "items", "data", "result"]);
@@ -166,7 +167,7 @@ export async function processMessageRules(options: { force?: boolean } = {}) {
     take: 50,
   });
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret, accountId: settings.avitoUserId });
+  const client = createAvitoClient(settings);
   let sent = 0;
   for (const message of messages) {
     const rule = await findMatchingRule(message.text, message.chatId, rules);
@@ -217,7 +218,7 @@ export async function sendManualMessage(chatId: string, text: string) {
   const settings = await getRawAvitoSettings();
   if (!settings.clientId || !settings.clientSecret) return { ok: false, message: "Заполните Client ID и Client Secret." };
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret, accountId: settings.avitoUserId });
+  const client = createAvitoClient(settings);
   try {
     const payload = await client.sendMessage(chat.avitoChatId, normalizeReplyText(text));
     await prisma.messageReplyLog.create({

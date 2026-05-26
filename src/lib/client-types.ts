@@ -145,6 +145,8 @@ export type ClientAvitoSettings = {
   secretStatus: "empty" | "ok" | "invalid" | "env";
   clientIdSource: "database" | "env" | "empty";
   secretSource: "database" | "env" | "empty" | "invalid";
+  oauthConnected: boolean;
+  oauthExpiresAt: string | null;
   sellerLocation: string;
   contactName: string;
   phone: string;

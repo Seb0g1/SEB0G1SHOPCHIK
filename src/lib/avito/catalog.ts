@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getRawAvitoSettings } from "@/lib/settings";
-import { AvitoClient } from "@/lib/avito/client";
+import { AvitoApiError, explainAvitoError } from "@/lib/avito/client";
+import { createAvitoClient } from "@/lib/avito/factory";
 
 export type AvitoCategoryNode = {
   name: string;
@@ -84,7 +85,7 @@ export async function getFieldValues(url: string): Promise<CatalogResult<string[
 async function getCachedOrFetch<T>(
   key: string,
   fallback: T,
-  fetcher: (client: AvitoClient) => Promise<T>,
+  fetcher: (client: ReturnType<typeof createAvitoClient>) => Promise<T>,
 ): Promise<CatalogResult<T>> {
   const cached = await readCache<T>(key);
   if (cached && cached.expiresAt > Date.now()) {
@@ -99,12 +100,12 @@ async function getCachedOrFetch<T>(
   }
 
   try {
-    const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret });
+    const client = createAvitoClient(settings);
     const data = await fetcher(client);
     await writeCache(key, data);
     return { data, source: "api" };
   } catch (error) {
-    const warning = error instanceof Error ? error.message : "Avito catalog request failed.";
+    const warning = error instanceof AvitoApiError ? explainAvitoError(error) : error instanceof Error ? error.message : "Avito catalog request failed.";
     return cached ? { data: cached.data, source: "cache", warning } : { data: fallback, source: "fallback", warning };
   }
 }

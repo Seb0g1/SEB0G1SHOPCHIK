@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { explainAvitoCredentialStatus, getAvitoCredentialStatus, getRawAvitoSettings } from "@/lib/settings";
-import { AvitoApiError, AvitoClient, explainAvitoError } from "@/lib/avito/client";
+import { AvitoApiError, explainAvitoError } from "@/lib/avito/client";
+import { createAvitoClient } from "@/lib/avito/factory";
 import {
   DEFAULT_REPLY_TEMPLATES,
   normalizeAvitoReplyText,
@@ -175,7 +176,7 @@ export async function probeAutomationCapabilities() {
     return toClientAutomationState(state);
   }
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret });
+  const client = createAvitoClient(settings);
   const capabilities = await client.probeCapabilities();
   const onlineUnavailable = capabilities.onlinePresence?.available === false;
 
@@ -223,7 +224,7 @@ export async function runOnlinePing(options: { force?: boolean } = {}) {
     return { ok: false, state: updated, message: "Заполните Client ID и Client Secret." };
   }
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret });
+  const client = createAvitoClient(settings);
 
   try {
     const payload = await client.setOnlinePresence();
@@ -273,7 +274,7 @@ export async function syncReviews(options: { force?: boolean } = {}) {
     return { ok: false, state: updated, synced: 0, drafts: 0, message: "Заполните Client ID и Client Secret." };
   }
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret });
+  const client = createAvitoClient(settings);
 
   try {
     const payload = await client.getReviews({ limit: 50 });
@@ -435,7 +436,7 @@ export async function sendReviewReply(reviewId: string, text?: string) {
     return { ok: false, draft: toClientDraft(failed), message: "Заполните Client ID и Client Secret." };
   }
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret });
+  const client = createAvitoClient(settings);
 
   try {
     const payload = await client.sendReviewReply(review.avitoReviewId, draft.text);

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { AvitoApiError, AvitoClient, explainAvitoError } from "@/lib/avito/client";
+import { AvitoApiError, explainAvitoError } from "@/lib/avito/client";
+import { createAvitoClient } from "@/lib/avito/factory";
 import { getCatalogFields } from "@/lib/avito/catalog";
 import { getRawAvitoSettings, upsertAvitoSettings } from "@/lib/settings";
 import { validateProductForApi } from "@/lib/product-validation";
@@ -30,11 +31,7 @@ export async function submitProductToAutoload(productId: string) {
     runStatus = errors.length ? "ERROR" : "READY_FOR_API";
     reportStatus = errors.length ? reportStatus : "missing_credentials";
   } else if (!errors.length) {
-    const client = new AvitoClient({
-      clientId: settings.clientId,
-      clientSecret: settings.clientSecret,
-      accountId: settings.avitoUserId,
-    });
+    const client = createAvitoClient(settings);
     try {
       const feedUrl = settings.publicFeedUrl || defaultFeedUrl();
       const reportEmail = settings.autoloadReportEmail || settings.email || "supportautoload@avito.ru";
@@ -129,7 +126,7 @@ export async function syncAutoloadProfile() {
   if (!settings.clientId || !settings.clientSecret) {
     return { ok: false, message: "Заполните Client ID и Client Secret." };
   }
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret, accountId: settings.avitoUserId });
+  const client = createAvitoClient(settings);
   try {
     const payload = await client.syncAutoloadProfile({
       feedUrl: settings.publicFeedUrl || defaultFeedUrl(),
@@ -151,7 +148,7 @@ export async function triggerAutoloadUpload() {
   if (!settings.clientId || !settings.clientSecret) {
     return { ok: false, message: "Заполните Client ID и Client Secret." };
   }
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret, accountId: settings.avitoUserId });
+  const client = createAvitoClient(settings);
   try {
     const payload = await client.triggerAutoloadUpload();
     await recordAutomationEvent("autoload_upload", "OK", "Autoload upload started.", payload);
@@ -169,7 +166,7 @@ export async function syncAutoloadReports() {
     return { ok: false, message: "Заполните Client ID и Client Secret." };
   }
 
-  const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret, accountId: settings.avitoUserId });
+  const client = createAvitoClient(settings);
   try {
     const payload = await client.getAutoloadReports({ per_page: 20, page: 0 });
     const reports = extractReports(payload);

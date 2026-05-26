@@ -203,6 +203,9 @@ model AvitoSettings {
   id                    String   @id @default("default")
   clientId              String?
   clientSecretEncrypted String?
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
   avitoUserId           String?
   sellerLocation        String?
   contactName           String?

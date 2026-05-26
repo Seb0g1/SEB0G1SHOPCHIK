@@ -160,6 +160,9 @@ CREATE TABLE IF NOT EXISTS "AvitoSettings" (
   "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
   "clientId" TEXT,
   "clientSecretEncrypted" TEXT,
+  "accessTokenEncrypted" TEXT,
+  "refreshTokenEncrypted" TEXT,
+  "tokenExpiresAt" DATETIME,
   "avitoUserId" TEXT,
   "sellerLocation" TEXT,
   "contactName" TEXT,
@@ -378,6 +381,9 @@ addColumnIfMissing(db, "ProductColorGroup", "supplierId", '"supplierId" TEXT');
 db.exec('CREATE INDEX IF NOT EXISTS "ProductTemplate_supplierId_idx" ON "ProductTemplate"("supplierId")');
 db.exec('CREATE INDEX IF NOT EXISTS "ProductColorGroup_supplierId_idx" ON "ProductColorGroup"("supplierId")');
 addColumnIfMissing(db, "AvitoSettings", "avitoUserId", '"avitoUserId" TEXT');
+addColumnIfMissing(db, "AvitoSettings", "accessTokenEncrypted", '"accessTokenEncrypted" TEXT');
+addColumnIfMissing(db, "AvitoSettings", "refreshTokenEncrypted", '"refreshTokenEncrypted" TEXT');
+addColumnIfMissing(db, "AvitoSettings", "tokenExpiresAt", '"tokenExpiresAt" DATETIME');
 addColumnIfMissing(db, "AvitoSettings", "autoloadReportEmail", '"autoloadReportEmail" TEXT');
 addColumnIfMissing(db, "AvitoSettings", "autoloadScheduleJson", `"autoloadScheduleJson" TEXT NOT NULL DEFAULT '[]'`);
 addColumnIfMissing(db, "AvitoSettings", "capabilitiesJson", `"capabilitiesJson" TEXT NOT NULL DEFAULT '{}'`);

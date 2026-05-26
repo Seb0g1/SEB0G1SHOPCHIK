@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CheckCircle2, Save, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ExternalLink, Save, ShieldCheck } from "lucide-react";
 import type { ClientAutomationState, ClientAvitoSettings } from "@/lib/client-types";
 import { Button, PageHeader, TextField, requestJson } from "@/components/ui-kit";
 
@@ -63,6 +63,30 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
     }
   }
 
+  function connectOAuth() {
+    if (!settings.clientId.trim()) {
+      setMessage("Сначала сохраните Client ID.");
+      return;
+    }
+    const scopes = [
+      "autoload:reports",
+      "items:apply_vas",
+      "items:info",
+      "messenger:read",
+      "messenger:write",
+      "stats:read",
+      "user:read",
+      "user_balance:read",
+      "user_operations:read",
+    ];
+    const url = new URL("https://avito.ru/oauth");
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("client_id", settings.clientId);
+    url.searchParams.set("redirect_uri", settings.redirectUrl);
+    url.searchParams.set("scope", scopes.join(" "));
+    window.location.href = url.toString();
+  }
+
   return (
     <>
       <PageHeader
@@ -73,6 +97,10 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
             <Button tone="secondary" busy={busy === "test"} onClick={test}>
               <CheckCircle2 className="h-4 w-4" />
               Проверить
+            </Button>
+            <Button tone="secondary" onClick={connectOAuth}>
+              <ExternalLink className="h-4 w-4" />
+              Подключить Avito
             </Button>
             <Button busy={busy === "save"} onClick={save}>
               <Save className="h-4 w-4" />
@@ -136,6 +164,8 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
             <div className="mt-3 space-y-2 text-sm">
               <SettingsStatusLine label="Client ID" value={sourceLabel(settings.clientIdSource)} />
               <SettingsStatusLine label="Client secret" value={secretSourceLabel(settings)} />
+              <SettingsStatusLine label="OAuth Avito" value={settings.oauthConnected ? "подключен" : "не подключен"} />
+              <SettingsStatusLine label="OAuth истекает" value={formatSavedAt(settings.oauthExpiresAt)} />
               <SettingsStatusLine label="Последнее сохранение" value={formatSavedAt(settings.updatedAt)} />
             </div>
             <p className="mt-3 rounded-md bg-canvas p-3 text-xs leading-5 text-moss">

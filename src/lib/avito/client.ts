@@ -1,5 +1,6 @@
 type TokenResponse = {
   access_token: string;
+  refresh_token?: string;
   expires_in?: number;
   token_type?: string;
 };
@@ -9,6 +10,10 @@ type AvitoClientOptions = {
   clientSecret: string;
   baseUrl?: string;
   accountId?: string;
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  tokenExpiresAt?: Date | string | null;
+  onTokenUpdate?: (tokens: { accessToken: string; refreshToken?: string | null; expiresIn?: number | null }) => Promise<void>;
 };
 
 type CachedToken = {
@@ -39,14 +44,58 @@ export class AvitoClient {
   }
 
   async getAccessToken(): Promise<string> {
+    const configuredExpiresAt = this.options.tokenExpiresAt ? new Date(this.options.tokenExpiresAt).getTime() : 0;
+    if (this.options.accessToken && configuredExpiresAt > Date.now() + 60_000) {
+      cachedToken = { token: this.options.accessToken, expiresAt: configuredExpiresAt };
+      return this.options.accessToken;
+    }
+
+    if (this.options.refreshToken) {
+      const payload = await this.requestOAuthToken({
+        grant_type: "refresh_token",
+        refresh_token: this.options.refreshToken,
+      });
+      await this.options.onTokenUpdate?.({
+        accessToken: payload.access_token,
+        refreshToken: payload.refresh_token ?? this.options.refreshToken,
+        expiresIn: payload.expires_in,
+      });
+      cachedToken = {
+        token: payload.access_token,
+        expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+      };
+      return payload.access_token;
+    }
+
     if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
       return cachedToken.token;
     }
 
-    const body = new URLSearchParams({
+    const payload = await this.requestOAuthToken({
       grant_type: "client_credentials",
+    });
+
+    cachedToken = {
+      token: payload.access_token,
+      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
+    };
+
+    return payload.access_token;
+  }
+
+  async exchangeAuthorizationCode(code: string, redirectUrl: string): Promise<TokenResponse> {
+    return this.requestOAuthToken({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUrl,
+    });
+  }
+
+  private async requestOAuthToken(params: Record<string, string>): Promise<TokenResponse> {
+    const body = new URLSearchParams({
       client_id: this.options.clientId,
       client_secret: this.options.clientSecret,
+      ...params,
     });
 
     const response = await fetch(`${this.baseUrl}/token`, {
@@ -60,12 +109,7 @@ export class AvitoClient {
       throw new AvitoApiError("Avito OAuth token request failed.", response.status, payload, "/token");
     }
 
-    cachedToken = {
-      token: payload.access_token,
-      expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
-    };
-
-    return payload.access_token;
+    return payload as TokenResponse;
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -414,7 +458,7 @@ export function explainAvitoError(error: AvitoApiError): string {
     return `Официальный endpoint Avito для постоянного online не настроен или недоступен для приложения. Online отключен без браузерной имитации.${endpoint}`;
   }
   if (error.status === 0) return `Endpoint Avito API не настроен в .env.${endpoint}`;
-  if (error.status === 401) return `Avito API отклонил OAuth-токен. Это не API key, а OAuth client_id/client_secret. Проверьте Client ID и Client Secret.${endpoint}`;
+  if (error.status === 401) return `Avito API отклонил токен. Проверьте Client ID/Secret и подключите Avito через OAuth-кнопку в настройках.${endpoint}`;
   if (error.status === 403) return `Avito API недоступен для этого приложения, аккаунта или тарифа.${endpoint}`;
   if (error.status === 404) return `Avito вернул 404 по конкретному методу API. Это значит, что путь не совпадает с вашим Swagger/API catalog или раздел не подключен к приложению.${endpoint}`;
   if (error.status === 429) return `Avito API ограничил частоту запросов. Worker продолжит позже.${endpoint}`;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { explainAvitoCredentialStatus, getAvitoCredentialStatus, getAvitoSettings, getRawAvitoSettings, upsertAvitoSettings } from "@/lib/settings";
-import { AvitoClient } from "@/lib/avito/client";
+import { createAvitoClient } from "@/lib/avito/factory";
 import { saveCapabilities } from "@/lib/autoload";
 
 const schema = z.object({
@@ -50,11 +50,7 @@ export async function POST() {
 
   const settings = await getRawAvitoSettings();
 
-  const client = new AvitoClient({
-    clientId: settings.clientId,
-    clientSecret: settings.clientSecret,
-    accountId: settings.avitoUserId,
-  });
+  const client = createAvitoClient(settings);
 
   try {
     const result = await client.testConnection();

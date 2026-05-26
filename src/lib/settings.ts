@@ -15,6 +15,9 @@ export async function getRawAvitoSettings() {
   return {
     clientId: settings?.clientId ?? process.env.AVITO_CLIENT_ID ?? "",
     clientSecret: decryptedSecret ?? process.env.AVITO_CLIENT_SECRET ?? "",
+    accessToken: decryptSecret(settings?.accessTokenEncrypted),
+    refreshToken: decryptSecret(settings?.refreshTokenEncrypted),
+    tokenExpiresAt: settings?.tokenExpiresAt ?? null,
     avitoUserId: settings?.avitoUserId ?? process.env.AVITO_ACCOUNT_ID ?? "self",
     sellerLocation: settings?.sellerLocation ?? defaultCity,
     contactName: settings?.contactName ?? "",
@@ -27,6 +30,28 @@ export async function getRawAvitoSettings() {
     autoloadScheduleJson: settings?.autoloadScheduleJson ?? "[]",
     capabilitiesJson: settings?.capabilitiesJson ?? "{}",
   };
+}
+
+export async function saveAvitoOAuthTokens(input: {
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresIn?: number | null;
+}) {
+  const expiresAt = new Date(Date.now() + Math.max(60, input.expiresIn ?? 3600) * 1000);
+  await prisma.avitoSettings.upsert({
+    where: { id: "default" },
+    create: {
+      id: "default",
+      accessTokenEncrypted: encryptSecret(input.accessToken),
+      refreshTokenEncrypted: input.refreshToken ? encryptSecret(input.refreshToken) : null,
+      tokenExpiresAt: expiresAt,
+    },
+    update: {
+      accessTokenEncrypted: encryptSecret(input.accessToken),
+      ...(input.refreshToken ? { refreshTokenEncrypted: encryptSecret(input.refreshToken) } : {}),
+      tokenExpiresAt: expiresAt,
+    },
+  });
 }
 
 export async function upsertAvitoSettings(input: {
