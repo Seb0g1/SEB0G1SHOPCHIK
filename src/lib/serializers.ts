@@ -258,7 +258,7 @@ export function toClientSettings(settings: {
     email: settings?.email ?? "",
     address: settings?.address ?? "Москва",
     publicFeedUrl: settings?.publicFeedUrl ?? defaultFeedUrl(),
-    redirectUrl: settings?.redirectUrl ?? defaultRedirectUrl(),
+    redirectUrl: resolveRedirectUrl(settings?.redirectUrl),
     avitoUserId: settings?.avitoUserId ?? process.env.AVITO_ACCOUNT_ID ?? "self",
     autoloadReportEmail: settings?.autoloadReportEmail ?? settings?.email ?? "",
     autoloadScheduleJson: settings?.autoloadScheduleJson ?? "[]",
@@ -304,5 +304,15 @@ export function defaultFeedUrl(): string {
 
 export function defaultRedirectUrl(): string {
   const baseUrl = process.env.APP_PUBLIC_URL || "http://localhost:4317";
-  return process.env.AVITO_REDIRECT_URL || `${baseUrl.replace(/\/$/, "")}/api/avito/oauth/callback`;
+  return process.env.AVITO_REDIRECT_URL || `${baseUrl.replace(/\/$/, "")}/`;
+}
+
+export function resolveRedirectUrl(storedUrl?: string | null): string {
+  const envUrl = process.env.AVITO_REDIRECT_URL?.trim();
+  if (envUrl) return envUrl;
+
+  const value = storedUrl?.trim();
+  if (value && !value.endsWith("/api/avito/oauth/callback")) return value;
+
+  return defaultRedirectUrl();
 }

@@ -154,10 +154,10 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <div className="flex items-center gap-3">
               <ShieldCheck className="h-5 w-5 text-sea" />
-              <h2 className="font-semibold">OAuth callback</h2>
+              <h2 className="font-semibold">Redirect URL Avito</h2>
             </div>
             <p className="mt-4 break-all rounded-md bg-canvas p-3 text-sm font-semibold">{settings.redirectUrl}</p>
-            <p className="mt-3 text-sm leading-6 text-moss">Если Avito принял только корень домена, для OAuth лучше добавить точный callback выше.</p>
+            <p className="mt-3 text-sm leading-6 text-moss">Для вашего приложения Avito используется корень домена. Если Avito вернет code на главную страницу, SEB0G1SHOPCHIK сам обработает его.</p>
           </div>
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <h2 className="font-semibold">Состояние сохранения</h2>

@@ -63,7 +63,7 @@ APP_PORT=4317
 SETTINGS_ENCRYPTION_KEY=put-a-long-random-secret-here
 
 AVITO_API_BASE_URL=https://api.avito.ru
-AVITO_REDIRECT_URL=https://amsterdam2.sebog1.ru/api/avito/oauth/callback
+AVITO_REDIRECT_URL=https://amsterdam2.sebog1.ru/
 AVITO_ACCOUNT_ID=self
 AVITO_CLIENT_ID=
 AVITO_CLIENT_SECRET=
@@ -197,13 +197,13 @@ amsterdam2.sebog1.ru -> YOUR_VPS_PUBLIC_IP
 
 ## Avito
 
-В Avito developer cabinet лучше указывать OAuth callback:
+В Avito developer cabinet указывайте тот Redirect URL, который уже закреплен за приложением:
 
 ```text
-https://amsterdam2.sebog1.ru/api/avito/oauth/callback
+https://amsterdam2.sebog1.ru/
 ```
 
-Если сейчас принят только корень домена, приложение все равно работает с `client_credentials`, но для OAuth flow callback лучше добавить отдельно.
+Приложение ловит `?code=...` на корне домена и само передает его в OAuth callback для обмена на token.
 
 Публикация идет скрыто через Autoload:
 

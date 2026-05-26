@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
-import { defaultFeedUrl, defaultRedirectUrl, toClientSettings } from "@/lib/serializers";
+import { defaultFeedUrl, resolveRedirectUrl, toClientSettings } from "@/lib/serializers";
 
 const defaultCity = "Москва";
 
@@ -25,7 +25,7 @@ export async function getRawAvitoSettings() {
     email: settings?.email ?? "",
     address: settings?.address ?? defaultCity,
     publicFeedUrl: settings?.publicFeedUrl ?? defaultFeedUrl(),
-    redirectUrl: settings?.redirectUrl ?? defaultRedirectUrl(),
+    redirectUrl: resolveRedirectUrl(settings?.redirectUrl),
     autoloadReportEmail: settings?.autoloadReportEmail ?? settings?.email ?? "",
     autoloadScheduleJson: settings?.autoloadScheduleJson ?? "[]",
     capabilitiesJson: settings?.capabilitiesJson ?? "{}",
