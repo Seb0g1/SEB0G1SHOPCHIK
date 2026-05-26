@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 import { buildAvitoExcelRows, generateAvitoExcel, normalizeSize, sanitizeAvitoHtml, validateAvitoExcelExport, type AvitoExcelProduct } from "@/lib/avito-excel";
+import { DEFAULT_COMPANY_EMAIL, DEFAULT_COMPANY_NAME } from "@/lib/defaults";
 
 const product: AvitoExcelProduct = {
   id: "product-1",
@@ -92,6 +93,28 @@ describe("avito excel export", () => {
     expect(rows[1].avitoId).toBe("8193053827");
   });
 
+  it("keeps selected primary photo first in image URLs", () => {
+    const white = product.variants[0].color;
+    const black = product.variants[2].color;
+    const rows = buildAvitoExcelRows(
+      [
+        {
+          ...product,
+          photos: [
+            { color: white, publicUrl: "/api/uploads/product-1/white-secondary.jpg", sortOrder: 1 },
+            { color: white, publicUrl: "/api/uploads/product-1/white-primary.jpg", sortOrder: 0 },
+            { color: black, publicUrl: "/api/uploads/product-1/black.jpg", sortOrder: 0 },
+          ],
+        },
+      ],
+      settings,
+    );
+
+    expect(rows[0].imageUrls).toBe(
+      "https://amsterdam2.sebog1.ru/api/uploads/product-1/white-primary.jpg | https://amsterdam2.sebog1.ru/api/uploads/product-1/white-secondary.jpg",
+    );
+  });
+
   it("maps short sizes to Avito values", () => {
     expect(normalizeSize("S")).toBe("46 (S)");
     expect(normalizeSize("M")).toBe("48 (M)");
@@ -118,6 +141,24 @@ describe("avito excel export", () => {
     expect(result.errors).toEqual([]);
     expect(result.warnings.join(" ")).toContain("localhost");
     expect(result.warnings.join(" ")).toContain("телефон");
+  });
+
+  it("uses default shop contacts and description when fields are empty", () => {
+    const rows = buildAvitoExcelRows(
+      [
+        {
+          ...product,
+          description: "",
+          generatedDescription: null,
+        },
+      ],
+      { publicFeedUrl: "https://amsterdam2.sebog1.ru/api/avito/feed.xml" },
+    );
+
+    expect(rows[0].email).toBe(DEFAULT_COMPANY_EMAIL);
+    expect(rows[0].companyName).toBe(DEFAULT_COMPANY_NAME);
+    expect(rows[0].description).toContain("Точка Стиля");
+    expect(rows[0].description).toContain("<strong>");
   });
 
   it("writes rows into the official Avito workbook template", async () => {

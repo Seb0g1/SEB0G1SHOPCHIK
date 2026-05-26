@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
+import { DEFAULT_COMPANY_EMAIL, DEFAULT_COMPANY_NAME } from "@/lib/defaults";
 import { defaultFeedUrl, resolveRedirectUrl, toClientSettings } from "@/lib/serializers";
 
 const defaultCity = "Москва";
@@ -20,13 +21,13 @@ export async function getRawAvitoSettings() {
     tokenExpiresAt: settings?.tokenExpiresAt ?? null,
     avitoUserId: settings?.avitoUserId ?? process.env.AVITO_ACCOUNT_ID ?? "self",
     sellerLocation: settings?.sellerLocation ?? defaultCity,
-    contactName: settings?.contactName ?? "",
+    contactName: settings?.contactName?.trim() || DEFAULT_COMPANY_NAME,
     phone: settings?.phone ?? "",
-    email: settings?.email ?? "",
+    email: settings?.email?.trim() || DEFAULT_COMPANY_EMAIL,
     address: settings?.address ?? defaultCity,
     publicFeedUrl: settings?.publicFeedUrl ?? defaultFeedUrl(),
     redirectUrl: resolveRedirectUrl(settings?.redirectUrl),
-    autoloadReportEmail: settings?.autoloadReportEmail ?? settings?.email ?? "",
+    autoloadReportEmail: settings?.autoloadReportEmail?.trim() || settings?.email?.trim() || DEFAULT_COMPANY_EMAIL,
     autoloadScheduleJson: settings?.autoloadScheduleJson ?? "[]",
     capabilitiesJson: settings?.capabilitiesJson ?? "{}",
   };
@@ -75,13 +76,13 @@ export async function upsertAvitoSettings(input: {
     avitoUserId: input.avitoUserId?.trim() || process.env.AVITO_ACCOUNT_ID || "self",
     ...(trimmedSecret ? { clientSecretEncrypted: encryptSecret(trimmedSecret) } : {}),
     sellerLocation: input.sellerLocation?.trim() || defaultCity,
-    contactName: input.contactName?.trim() || null,
+    contactName: input.contactName?.trim() || DEFAULT_COMPANY_NAME,
     phone: input.phone?.trim() || null,
-    email: input.email?.trim() || null,
+    email: input.email?.trim() || DEFAULT_COMPANY_EMAIL,
     address: input.address?.trim() || defaultCity,
     publicFeedUrl: input.publicFeedUrl?.trim() || null,
     redirectUrl: input.redirectUrl?.trim() || process.env.AVITO_REDIRECT_URL || null,
-    autoloadReportEmail: input.autoloadReportEmail?.trim() || input.email?.trim() || null,
+    autoloadReportEmail: input.autoloadReportEmail?.trim() || input.email?.trim() || DEFAULT_COMPANY_EMAIL,
     autoloadScheduleJson: input.autoloadScheduleJson?.trim() || "[]",
     ...(input.capabilitiesJson !== undefined ? { capabilitiesJson: input.capabilitiesJson } : {}),
   };

@@ -1,4 +1,5 @@
 import type { ClientAvitoSettings, ClientCustomerOrder, ClientProduct, ClientSupplier, ClientSupplierTask } from "@/lib/client-types";
+import { DEFAULT_COMPANY_EMAIL, DEFAULT_COMPANY_NAME } from "@/lib/defaults";
 
 type ProductRecord = {
   id: string;
@@ -253,14 +254,14 @@ export function toClientSettings(settings: {
     oauthConnected: Boolean(settings?.accessTokenEncrypted || settings?.refreshTokenEncrypted),
     oauthExpiresAt: settings?.tokenExpiresAt?.toISOString() ?? null,
     sellerLocation: settings?.sellerLocation ?? "Москва",
-    contactName: settings?.contactName ?? "",
+    contactName: settings?.contactName ?? DEFAULT_COMPANY_NAME,
     phone: settings?.phone ?? "",
-    email: settings?.email ?? "",
+    email: settings?.email ?? DEFAULT_COMPANY_EMAIL,
     address: settings?.address ?? "Москва",
     publicFeedUrl: settings?.publicFeedUrl ?? defaultFeedUrl(),
     redirectUrl: resolveRedirectUrl(settings?.redirectUrl),
     avitoUserId: settings?.avitoUserId ?? process.env.AVITO_ACCOUNT_ID ?? "self",
-    autoloadReportEmail: settings?.autoloadReportEmail ?? settings?.email ?? "",
+    autoloadReportEmail: settings?.autoloadReportEmail ?? settings?.email ?? DEFAULT_COMPANY_EMAIL,
     autoloadScheduleJson: settings?.autoloadScheduleJson ?? "[]",
     capabilities: parseUnknownJsonObject(settings?.capabilitiesJson ?? "{}"),
     updatedAt: settings?.updatedAt?.toISOString() ?? null,

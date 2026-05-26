@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import JSZip from "jszip";
 import { displayVariantSize } from "@/lib/avito/field-utils";
+import { DEFAULT_COMPANY_EMAIL, DEFAULT_COMPANY_NAME, DEFAULT_PRODUCT_DESCRIPTION_HTML } from "@/lib/defaults";
 import { activeForFeed } from "@/lib/variants";
 import { absolutePublicUrl } from "@/lib/xml";
 
@@ -140,8 +141,8 @@ export function buildAvitoExcelRows(products: AvitoExcelProduct[], settings: Avi
         targetAudience: "Частные лица и бизнес",
         dateEnd: "",
         avitoStatus: "",
-        email: settings.email?.trim() || "",
-        companyName: settings.contactName?.trim() || "SEB0G1SHOPCHIK",
+        email: settings.email?.trim() || DEFAULT_COMPANY_EMAIL,
+        companyName: settings.contactName?.trim() || DEFAULT_COMPANY_NAME,
       };
     });
   });
@@ -157,7 +158,7 @@ export function validateAvitoExcelExport(products: AvitoExcelProduct[], settings
   if (!rows.length) errors.push("Нет активных вариантов с остатком больше 0.");
   if (!settings.phone?.trim()) warnings.push("В настройках не заполнен телефон: колонка Номер телефона будет пустой.");
   if (!settings.address?.trim()) warnings.push("В настройках не заполнен адрес: будет использована Москва.");
-  if (!settings.email?.trim()) warnings.push("В настройках не заполнена почта: колонка Почта будет пустой.");
+  if (!settings.email?.trim()) warnings.push(`В настройках не заполнена почта: будет использована ${DEFAULT_COMPANY_EMAIL}.`);
   if (origin !== targetOrigin) {
     warnings.push(`Публичный домен для фото сейчас ${origin}. Для Avito лучше использовать ${targetOrigin}.`);
   }
@@ -228,7 +229,7 @@ function buildExcelDescription(
   variant: AvitoExcelProduct["variants"][number],
   group?: NonNullable<AvitoExcelProduct["colorGroups"]>[number],
 ) {
-  const base = group?.description || product.generatedDescription || product.description || "";
+  const base = group?.description || product.generatedDescription || product.description || DEFAULT_PRODUCT_DESCRIPTION_HTML;
   const safeBase = base.includes("<") ? sanitizeAvitoHtml(base) : textToHtml(base);
   const details = [
     `<p><strong>Параметры объявления</strong></p>`,

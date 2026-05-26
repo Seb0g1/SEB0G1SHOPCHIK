@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ImagePlus, Plus, Search, Trash2, UploadCloud } from "lucide-react";
+import { Check, ImagePlus, Plus, Search, Star, Trash2, UploadCloud } from "lucide-react";
 import type { ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { displayVariantSize, findFieldByRole, getFieldRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
+import { DEFAULT_PRODUCT_DESCRIPTION_HTML } from "@/lib/defaults";
 import { makeSku } from "@/lib/variants";
 import { Button, NumberField, PageHeader, SelectField, TextField, requestJson } from "@/components/ui-kit";
 
@@ -61,7 +62,7 @@ export function ProductWizard() {
     avitoCategoryName: "",
     avitoFields: {} as Record<string, string>,
     supplierId: "",
-    description: "",
+    description: DEFAULT_PRODUCT_DESCRIPTION_HTML,
   });
   const [groups, setGroups] = useState<ColorGroupDraft[]>([makeGroup("Белый"), makeGroup("Черный")]);
 
@@ -421,6 +422,11 @@ function ColorGroupCard({
   onRemove: () => void;
 }) {
   const activeRows = variantRowsForGroup(group, sizeField, basePrice).filter((row) => row.enabled && row.stockQty > 0);
+  function movePhotoFirst(index: number) {
+    const photo = group.photos[index];
+    if (!photo) return;
+    onChange({ photos: [photo, ...group.photos.filter((_, itemIndex) => itemIndex !== index)] });
+  }
 
   return (
     <div className="rounded-md border border-line bg-canvas p-4">
@@ -465,6 +471,22 @@ function ColorGroupCard({
         </label>
 
         <div className="space-y-4">
+          {group.photos.length ? (
+            <div className="rounded-md border border-line bg-white p-3">
+              <p className="text-xs font-semibold text-moss">Первое фото станет главным на Avito</p>
+              <div className="mt-2 space-y-2">
+                {group.photos.map((file, index) => (
+                  <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 rounded-md bg-canvas px-2 py-2 text-xs">
+                    <span className="min-w-0 truncate font-semibold">{file.name}</span>
+                    <Button tone={index === 0 ? "secondary" : "primary"} className="h-8 shrink-0 px-2 text-xs" onClick={() => movePhotoFirst(index)}>
+                      <Star className="h-3.5 w-3.5" />
+                      {index === 0 ? "Главное" : "Первым"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {sizeField ? (
             <LinkedSizePicker field={sizeField} selected={group.sizes} onChange={(sizes) => onChange({ sizes })} />
           ) : (

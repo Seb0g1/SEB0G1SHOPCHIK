@@ -1,3 +1,5 @@
+import { DEFAULT_PRODUCT_DESCRIPTION_HTML } from "@/lib/defaults";
+
 type ProductLike = {
   title: string;
   brand: string | null;
@@ -42,7 +44,7 @@ ${brandLine}
 - перед заказом можно уточнить замеры;
 - если нужного размера нет в списке, напишите - проверю наличие.
 
-${product.description || "Описание можно дополнить деталями поставщика, материалом, мерками и условиями доставки."}
+${product.description || DEFAULT_PRODUCT_DESCRIPTION_HTML}
 `);
 }
 

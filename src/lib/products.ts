@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_PRODUCT_DESCRIPTION_HTML } from "@/lib/defaults";
 import { toClientProduct } from "@/lib/serializers";
 import { uploadRoot } from "@/lib/storage";
 import { expandVariants, makeSku } from "@/lib/variants";
@@ -9,7 +10,7 @@ export const productInclude = {
   supplier: true,
   variants: { orderBy: [{ color: "asc" as const }, { sortOrder: "asc" as const }, { size: "asc" as const }] },
   colorGroups: { orderBy: [{ sortOrder: "asc" as const }, { color: "asc" as const }] },
-  photos: { orderBy: [{ color: "asc" as const }, { sortOrder: "asc" as const }, { createdAt: "asc" as const }] },
+  photos: { orderBy: [{ sortOrder: "asc" as const }, { color: "asc" as const }, { createdAt: "asc" as const }] },
   publicationRuns: { orderBy: { submittedAt: "desc" as const }, take: 8 },
 };
 
@@ -76,7 +77,7 @@ export async function createProduct(input: {
       avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
       avitoCategoryName: input.avitoCategoryName?.trim() || null,
       avitoFieldsJson: JSON.stringify(input.avitoFields ?? {}),
-      description: "",
+      description: DEFAULT_PRODUCT_DESCRIPTION_HTML,
       status: "DRAFT",
     },
   });
@@ -220,7 +221,7 @@ export async function createBulkProduct(input: {
       avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
       avitoCategoryName: input.avitoCategoryName?.trim() || null,
       avitoFieldsJson: JSON.stringify(input.avitoFields ?? {}),
-      description: "",
+      description: DEFAULT_PRODUCT_DESCRIPTION_HTML,
       status: "DRAFT",
     },
   });

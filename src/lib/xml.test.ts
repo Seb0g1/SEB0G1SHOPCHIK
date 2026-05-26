@@ -71,4 +71,24 @@ describe("xml", () => {
     expect(xml).toContain('url="http://localhost:4317/api/uploads/product-1/black.jpg"');
     expect(xml).not.toContain('url="http://localhost:4317/api/uploads/product-1/common.jpg"');
   });
+
+  it("puts the lowest sortOrder photo first for each color", () => {
+    const xml = buildAvitoFeed(
+      [
+        {
+          ...product,
+          photos: [
+            { color: product.variants[0].color, publicUrl: "/api/uploads/product-1/white-secondary.jpg", sortOrder: 1 },
+            { color: product.variants[0].color, publicUrl: "/api/uploads/product-1/white-primary.jpg", sortOrder: 0 },
+          ],
+        },
+      ],
+      {
+        address: "Москва",
+        publicFeedUrl: "http://localhost:4317/api/avito/feed.xml",
+      },
+    );
+
+    expect(xml.indexOf("white-primary.jpg")).toBeLessThan(xml.indexOf("white-secondary.jpg"));
+  });
 });

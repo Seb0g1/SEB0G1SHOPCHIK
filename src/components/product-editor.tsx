@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ImagePlus, PackagePlus, Save, Send, Sparkles, Trash2, UploadCloud } from "lucide-react";
+import { ImagePlus, PackagePlus, Save, Send, Sparkles, Star, Trash2, UploadCloud } from "lucide-react";
 import type { ClientProduct, ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
@@ -169,6 +169,17 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
     });
   }
 
+  async function setPrimaryPhoto(photoId: string) {
+    await withBusy(`photo-primary-${photoId}`, async () => {
+      const payload = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}/photos/${photoId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "primary" }),
+      });
+      setProduct(payload.product);
+      setMessage("Главное фото для цвета обновлено. Оно будет первым в Avito.");
+    });
+  }
+
   function patchVariant(id: string, patch: Partial<ClientProduct["variants"][number]>) {
     setProduct({
       ...product,
@@ -288,7 +299,23 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                       <div key={photo.id} className="overflow-hidden rounded-md border border-line">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img className="aspect-square w-full object-cover" src={photo.publicUrl} alt={photo.originalName} />
-                        <p className="truncate px-2 py-1 text-xs text-moss">{photo.color || "общие"}</p>
+                        <div className="space-y-2 p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-xs text-moss">{photo.color || "общие"}</p>
+                            {isPrimaryPhoto(product.photos, photo) ? (
+                              <span className="rounded-full bg-teal-50 px-2 py-1 text-[11px] font-semibold text-sea">Главное</span>
+                            ) : null}
+                          </div>
+                          <Button
+                            tone={isPrimaryPhoto(product.photos, photo) ? "secondary" : "primary"}
+                            className="h-9 w-full text-xs"
+                            busy={busy === `photo-primary-${photo.id}`}
+                            onClick={() => setPrimaryPhoto(photo.id)}
+                          >
+                            <Star className="h-4 w-4" />
+                            Первым
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -488,6 +515,13 @@ function Row({ label, value }: { label: string; value: number }) {
       <dd className="font-semibold">{value}</dd>
     </div>
   );
+}
+
+function isPrimaryPhoto(photos: ClientProduct["photos"], photo: ClientProduct["photos"][number]) {
+  const firstForColor = [...photos]
+    .filter((item) => item.color === photo.color)
+    .sort((a, b) => a.sortOrder - b.sortOrder || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
+  return firstForColor?.id === photo.id;
 }
 
 function SupplierSelect({
