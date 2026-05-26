@@ -1,6 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import JSZip from "jszip";
+import { getApparelPreset, getColorMode } from "@/lib/apparel";
 import { displayVariantSize } from "@/lib/avito/field-utils";
 import { DEFAULT_COMPANY_EMAIL, DEFAULT_COMPANY_NAME, DEFAULT_PRODUCT_DESCRIPTION_HTML } from "@/lib/defaults";
 import { activeForFeed } from "@/lib/variants";
@@ -19,6 +20,8 @@ export type AvitoExcelProduct = {
   title: string;
   brand: string | null;
   condition: string;
+  apparelPreset?: string | null;
+  colorMode?: string | null;
   description: string;
   generatedDescription: string | null;
   avitoFieldsJson?: string;
@@ -100,6 +103,9 @@ export function buildAvitoExcelRows(products: AvitoExcelProduct[], settings: Avi
   const imageBaseUrl = imageOrigin(settings);
 
   return products.flatMap((product) => {
+    const preset = getApparelPreset(product.apparelPreset);
+    const colorMode = getColorMode(product.colorMode);
+    const exportColor = colorMode !== "NONE";
     const productFields = parseRecord(product.avitoFieldsJson);
     const sortedVariants = [...product.variants].sort(
       (a, b) => a.color.localeCompare(b.color, "ru") || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.size.localeCompare(b.size, "ru"),
@@ -110,8 +116,8 @@ export function buildAvitoExcelRows(products: AvitoExcelProduct[], settings: Avi
       const groupFields = parseRecord(group?.avitoFieldsJson);
       const variantFields = parseRecord(variant.avitoFieldsJson);
       const fields = { ...productFields, ...groupFields, ...variantFields };
-      const color = group?.avitoColorValue || variant.color;
-      const title = `${product.title} (${color})`;
+      const color = exportColor ? group?.avitoColorValue || variant.color : "";
+      const title = product.title.trim();
       const photos = photosForColor(product, variant.color).map((photo) => absolutePublicUrl(photo.publicUrl, imageBaseUrl));
 
       return {
@@ -131,13 +137,13 @@ export function buildAvitoExcelRows(products: AvitoExcelProduct[], settings: Avi
         adType: normalizeAdType(fieldValue(fields, ["AdType", "Вид объявления"]) || productFields.AdType),
         brand: product.brand?.trim() || fieldValue(fields, ["Brand", "Бренд одежды"]) || "",
         color,
-        manufacturerColor: group?.color || color,
+        manufacturerColor: exportColor ? group?.color || color : "",
         material: fieldValue(fields, ["Material", "Материал основной части", "MainMaterial"]) || "Хлопок",
         joinAds: "Да",
-        multiAdName: product.title.toLowerCase(),
-        productType: "Кофты и футболки",
+        multiAdName: title,
+        productType: fieldValue(fields, ["ProductType", "Тип товара", "GoodsType"]) || preset.avitoProductType,
         size: normalizeSize(variant.size),
-        subtype: fieldValue(fields, ["Subtype", "Подвид товара", "GoodsSubType"]) || "Футболка",
+        subtype: fieldValue(fields, ["Subtype", "Подвид товара", "GoodsSubType"]) || preset.avitoSubtype,
         targetAudience: "Частные лица и бизнес",
         dateEnd: "",
         avitoStatus: "",
@@ -229,12 +235,13 @@ function buildExcelDescription(
   variant: AvitoExcelProduct["variants"][number],
   group?: NonNullable<AvitoExcelProduct["colorGroups"]>[number],
 ) {
+  const exportColor = getColorMode(product.colorMode) !== "NONE";
   const base = group?.description || product.generatedDescription || product.description || DEFAULT_PRODUCT_DESCRIPTION_HTML;
   const safeBase = base.includes("<") ? sanitizeAvitoHtml(base) : textToHtml(base);
   const details = [
     `<p><strong>Параметры объявления</strong></p>`,
     "<ul>",
-    `<li>Цвет: ${escapeHtml(group?.avitoColorValue || variant.color)}</li>`,
+    exportColor ? `<li>Цвет: ${escapeHtml(group?.avitoColorValue || variant.color)}</li>` : "",
     `<li>Размер: ${escapeHtml(normalizeSize(variant.size))}</li>`,
     `<li>Артикул: ${escapeHtml(variant.sku)}</li>`,
     "</ul>",

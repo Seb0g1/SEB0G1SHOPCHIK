@@ -1,4 +1,5 @@
 import type { ClientAvitoSettings, ClientCustomerOrder, ClientProduct, ClientSupplier, ClientSupplierTask } from "@/lib/client-types";
+import { DEFAULT_APPAREL_PRESET, DEFAULT_COLOR_MODE } from "@/lib/apparel";
 import { DEFAULT_COMPANY_EMAIL, DEFAULT_COMPANY_NAME } from "@/lib/defaults";
 
 type ProductRecord = {
@@ -10,6 +11,8 @@ type ProductRecord = {
   category: string;
   goodsType: string;
   productType: string;
+  apparelPreset?: string | null;
+  colorMode?: string | null;
   adType: string;
   gender: string;
   condition: string;
@@ -97,6 +100,8 @@ type SupplierRecord = {
 export function toClientProduct(product: ProductRecord): ClientProduct {
   return {
     ...product,
+    apparelPreset: product.apparelPreset ?? DEFAULT_APPAREL_PRESET,
+    colorMode: product.colorMode ?? DEFAULT_COLOR_MODE,
     supplier: product.supplier ? toClientSupplier(product.supplier) : null,
     avitoFields: parseJsonObject(product.avitoFieldsJson),
     publicationErrors: parseJsonList(product.publicationErrorsJson),

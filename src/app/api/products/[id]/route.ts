@@ -9,6 +9,8 @@ const updateProductSchema = z.object({
   category: z.string().optional(),
   goodsType: z.string().optional(),
   productType: z.string().optional(),
+  apparelPreset: z.string().optional(),
+  colorMode: z.string().optional(),
   adType: z.string().optional(),
   gender: z.string().optional(),
   condition: z.string().optional(),

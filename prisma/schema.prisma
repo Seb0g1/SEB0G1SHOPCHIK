@@ -16,6 +16,8 @@ model ProductTemplate {
   category              String           @default("Личные вещи")
   goodsType             String           @default("Одежда, обувь, аксессуары")
   productType           String           @default("Футболки и топы")
+  apparelPreset         String           @default("TSHIRT")
+  colorMode             String           @default("MULTI")
   adType                String           @default("Товар приобретен на продажу")
   gender                String           @default("Мужская")
   condition             String           @default("Новое")

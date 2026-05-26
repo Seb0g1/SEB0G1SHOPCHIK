@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_APPAREL_PRESET, DEFAULT_COLOR_MODE, getApparelPreset, getColorMode } from "@/lib/apparel";
 import { DEFAULT_PRODUCT_DESCRIPTION_HTML } from "@/lib/defaults";
 import { toClientProduct } from "@/lib/serializers";
 import { uploadRoot } from "@/lib/storage";
@@ -50,6 +51,8 @@ export async function createProduct(input: {
   title: string;
   brand?: string;
   supplierId?: string | null;
+  apparelPreset?: string;
+  colorMode?: string;
   basePrice: number;
   color?: string;
   sizes?: string[];
@@ -73,6 +76,8 @@ export async function createProduct(input: {
       title: input.title.trim(),
       brand: input.brand?.trim() || null,
       supplierId: input.supplierId?.trim() || null,
+      apparelPreset: getApparelPreset(input.apparelPreset ?? DEFAULT_APPAREL_PRESET).id,
+      colorMode: getColorMode(input.colorMode ?? DEFAULT_COLOR_MODE),
       basePrice: Math.max(0, Math.round(input.basePrice)),
       avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
       avitoCategoryName: input.avitoCategoryName?.trim() || null,
@@ -108,6 +113,8 @@ export async function updateProduct(
     category?: string;
     goodsType?: string;
     productType?: string;
+    apparelPreset?: string;
+    colorMode?: string;
     adType?: string;
     gender?: string;
     condition?: string;
@@ -151,6 +158,8 @@ export async function updateProduct(
     ...(input.category !== undefined ? { category: input.category.trim() } : {}),
     ...(input.goodsType !== undefined ? { goodsType: input.goodsType.trim() } : {}),
     ...(input.productType !== undefined ? { productType: input.productType.trim() } : {}),
+    ...(input.apparelPreset !== undefined ? { apparelPreset: getApparelPreset(input.apparelPreset).id } : {}),
+    ...(input.colorMode !== undefined ? { colorMode: getColorMode(input.colorMode) } : {}),
     ...(input.adType !== undefined ? { adType: input.adType.trim() } : {}),
     ...(input.gender !== undefined ? { gender: input.gender.trim() } : {}),
     ...(input.condition !== undefined ? { condition: input.condition.trim() } : {}),
@@ -196,6 +205,8 @@ export async function createBulkProduct(input: {
   title: string;
   brand?: string;
   supplierId?: string | null;
+  apparelPreset?: string;
+  colorMode?: string;
   basePrice: number;
   avitoCategorySlug?: string | null;
   avitoCategoryName?: string | null;
@@ -217,6 +228,8 @@ export async function createBulkProduct(input: {
       title: input.title.trim(),
       brand: input.brand?.trim() || null,
       supplierId: input.supplierId?.trim() || null,
+      apparelPreset: getApparelPreset(input.apparelPreset ?? DEFAULT_APPAREL_PRESET).id,
+      colorMode: getColorMode(input.colorMode ?? DEFAULT_COLOR_MODE),
       basePrice: Math.max(0, Math.round(input.basePrice)),
       avitoCategorySlug: input.avitoCategorySlug?.trim() || null,
       avitoCategoryName: input.avitoCategoryName?.trim() || null,

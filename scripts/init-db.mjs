@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS "ProductTemplate" (
   "category" TEXT NOT NULL DEFAULT 'Личные вещи',
   "goodsType" TEXT NOT NULL DEFAULT 'Одежда, обувь, аксессуары',
   "productType" TEXT NOT NULL DEFAULT 'Футболки и топы',
+  "apparelPreset" TEXT NOT NULL DEFAULT 'TSHIRT',
+  "colorMode" TEXT NOT NULL DEFAULT 'MULTI',
   "adType" TEXT NOT NULL DEFAULT 'Товар приобретен на продажу',
   "gender" TEXT NOT NULL DEFAULT 'Мужская',
   "condition" TEXT NOT NULL DEFAULT 'Новое',
@@ -373,6 +375,8 @@ addColumnIfMissing(db, "ProductTemplate", "avitoFieldsJson", `"avitoFieldsJson" 
 addColumnIfMissing(db, "ProductTemplate", "publicationErrorsJson", `"publicationErrorsJson" TEXT NOT NULL DEFAULT '[]'`);
 addColumnIfMissing(db, "ProductTemplate", "lastApiSyncAt", '"lastApiSyncAt" DATETIME');
 addColumnIfMissing(db, "ProductTemplate", "supplierId", '"supplierId" TEXT');
+addColumnIfMissing(db, "ProductTemplate", "apparelPreset", `"apparelPreset" TEXT NOT NULL DEFAULT 'TSHIRT'`);
+addColumnIfMissing(db, "ProductTemplate", "colorMode", `"colorMode" TEXT NOT NULL DEFAULT 'MULTI'`);
 addColumnIfMissing(db, "ProductVariant", "avitoFieldsJson", `"avitoFieldsJson" TEXT NOT NULL DEFAULT '{}'`);
 addColumnIfMissing(db, "ProductVariant", "needsSync", '"needsSync" BOOLEAN NOT NULL DEFAULT 0');
 addColumnIfMissing(db, "ProductVariant", "lastPriceSyncAt", '"lastPriceSyncAt" DATETIME');

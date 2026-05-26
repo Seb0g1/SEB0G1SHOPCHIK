@@ -6,6 +6,8 @@ const createProductSchema = z.object({
   title: z.string().min(2),
   brand: z.string().optional(),
   supplierId: z.string().nullable().optional(),
+  apparelPreset: z.string().optional(),
+  colorMode: z.string().optional(),
   basePrice: z.coerce.number().int().min(0),
   color: z.string().optional(),
   sizes: z.array(z.string()).optional(),

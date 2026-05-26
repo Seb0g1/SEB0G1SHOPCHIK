@@ -64,6 +64,8 @@ export type ClientProduct = {
   category: string;
   goodsType: string;
   productType: string;
+  apparelPreset: string;
+  colorMode: string;
   adType: string;
   gender: string;
   condition: string;

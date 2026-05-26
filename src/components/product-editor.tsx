@@ -6,6 +6,16 @@ import { useRouter } from "next/navigation";
 import { ImagePlus, PackagePlus, Save, Send, Sparkles, Star, Trash2, UploadCloud } from "lucide-react";
 import type { ClientProduct, ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
+import {
+  APPAREL_PRESETS,
+  COLOR_MODES,
+  NO_COLOR_LABEL,
+  apparelPresetByLabel,
+  apparelPresetLabel,
+  colorModeByLabel,
+  colorModeLabel,
+  getColorMode,
+} from "@/lib/apparel";
 import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
 import { describePublicationReportStatus } from "@/lib/publication-status";
 import { Button, NumberField, PageHeader, SelectField, StatusPill, TextField, requestJson } from "@/components/ui-kit";
@@ -43,6 +53,8 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
   const colorField = findFieldByRole(fields, "color");
   const sizeField = findFieldByRole(fields, "size");
   const categoryFields = fields.filter((field) => !isVariantField(field) && !isProductCoreField(field));
+  const selectedColorMode = getColorMode(product.colorMode);
+  const usesColor = selectedColorMode !== "NONE";
 
   useEffect(() => {
     requestJson<{ suppliers: ClientSupplier[] }>("/api/suppliers")
@@ -73,6 +85,8 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
           title: product.title,
           brand: product.brand,
           supplierId: product.supplierId,
+          apparelPreset: product.apparelPreset,
+          colorMode: product.colorMode,
           basePrice: product.basePrice,
           description: product.description,
           generatedDescription: product.generatedDescription,
@@ -94,7 +108,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
     if (!files.length) return;
     await withBusy("photos", async () => {
       const data = new FormData();
-      data.append("color", photoColor || colors[0] || variantDraft.color || "Без цвета");
+      data.append("color", usesColor ? photoColor || colors[0] || variantDraft.color || NO_COLOR_LABEL : "");
       files.forEach((file) => data.append("files", file));
       const response = await fetch(`/api/products/${product.id}/photos`, { method: "POST", body: data });
       if (!response.ok) throw new Error(await response.text());
@@ -111,7 +125,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
         method: "POST",
         body: JSON.stringify({
           ...variantDraft,
-          color: variantDraft.color.trim() || "Без цвета",
+          color: usesColor ? variantDraft.color.trim() || NO_COLOR_LABEL : NO_COLOR_LABEL,
           sizes: sizeField ? variantDraft.sizes : ["ONE_SIZE"],
         }),
       });
@@ -251,6 +265,18 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                     <TextField label="Название" value={product.title} onChange={(title) => setProduct({ ...product, title })} />
                     <TextField label="Бренд" value={product.brand ?? ""} onChange={(brand) => setProduct({ ...product, brand })} />
                     <NumberField label="Базовая цена" value={product.basePrice} onChange={(basePrice) => setProduct({ ...product, basePrice })} />
+                    <SelectField
+                      label="Тип одежды"
+                      value={apparelPresetLabel(product.apparelPreset)}
+                      options={APPAREL_PRESETS.map((preset) => preset.label)}
+                      onChange={(label) => setProduct({ ...product, apparelPreset: apparelPresetByLabel(label).id })}
+                    />
+                    <SelectField
+                      label="Режим цвета"
+                      value={colorModeLabel(product.colorMode)}
+                      options={COLOR_MODES.map((mode) => mode.label)}
+                      onChange={(label) => setProduct({ ...product, colorMode: colorModeByLabel(label) })}
+                    />
                     <SupplierSelect
                       label="Поставщик товара"
                       value={product.supplierId ?? ""}
@@ -283,10 +309,14 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
               {tab === "photos" ? (
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
-                    <SelectField label="Цвет фото" value={photoColor} options={["", ...colors]} onChange={setPhotoColor} />
+                    {usesColor ? (
+                      <SelectField label="Цвет фото" value={photoColor} options={["", ...colors]} onChange={setPhotoColor} />
+                    ) : (
+                      <p className="rounded-md border border-line bg-canvas p-3 text-sm font-semibold text-moss">Режим без цвета: фото будут общими для всех размеров.</p>
+                    )}
                     <label className="flex min-h-[120px] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-line bg-canvas p-6 text-center">
                       <ImagePlus className="h-10 w-10 text-sea" />
-                      <span className="mt-3 text-sm font-semibold">Загрузить фото для выбранного цвета</span>
+                      <span className="mt-3 text-sm font-semibold">{usesColor ? "Загрузить фото для выбранного цвета" : "Загрузить общие фото товара"}</span>
                       <input ref={fileInputRef} className="mt-4 block text-sm" type="file" accept="image/*" multiple />
                     </label>
                   </div>
@@ -325,7 +355,9 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
               {tab === "variants" ? (
                 <div className="space-y-5">
                   <div className="grid gap-4 rounded-md border border-line bg-canvas p-4 md:grid-cols-4">
-                    {colorField ? (
+                    {!usesColor ? (
+                      <p className="rounded-md border border-line bg-white p-3 text-sm font-semibold text-moss">Варианты создаются только по размерам. Цвет в Excel будет пустым.</p>
+                    ) : colorField ? (
                       <AvitoFieldControl field={colorField} value={variantDraft.color} onChange={(color) => setVariantDraft({ ...variantDraft, color })} />
                     ) : (
                       <TextField label="Цвет" value={variantDraft.color} onChange={(color) => setVariantDraft({ ...variantDraft, color })} />
@@ -348,7 +380,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                   </div>
 
                   <div className="grid gap-4 rounded-md border border-line bg-canvas p-4 md:grid-cols-5">
-                    <SelectField label="Цвет" value={bulkPrice.color} options={["", ...colors]} onChange={(color) => setBulkPrice({ ...bulkPrice, color })} />
+                    {usesColor ? <SelectField label="Цвет" value={bulkPrice.color} options={["", ...colors]} onChange={(color) => setBulkPrice({ ...bulkPrice, color })} /> : null}
                     <SelectField label="Операция" value={bulkPrice.mode} options={["SET", "ADD", "PERCENT"]} onChange={(mode) => setBulkPrice({ ...bulkPrice, mode })} />
                     <label className="block">
                       <span className="mb-1 block text-xs font-semibold text-moss">Значение</span>
@@ -367,7 +399,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                     </div>
                   </div>
 
-                  {product.colorGroups.length ? (
+                  {usesColor && product.colorGroups.length ? (
                     <div className="rounded-md border border-line bg-canvas p-4">
                       <p className="mb-3 font-semibold">Поставщики по цветам</p>
                       <div className="grid gap-3 md:grid-cols-2">
@@ -394,7 +426,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                       <thead className="bg-canvas text-xs uppercase text-moss">
                         <tr>
                           <th className="px-3 py-2 text-left">SKU</th>
-                          <th className="px-3 py-2 text-left">Цвет</th>
+                          {usesColor ? <th className="px-3 py-2 text-left">Цвет</th> : null}
                           <th className="px-3 py-2 text-left">Размер</th>
                           <th className="px-3 py-2 text-left">Цена</th>
                           <th className="px-3 py-2 text-left">Остаток</th>
@@ -405,7 +437,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                         {product.variants.map((variant) => (
                           <tr key={variant.id}>
                             <td className="px-3 py-2 font-mono text-xs">{variant.sku}</td>
-                            <td className="px-3 py-2">{variant.color}</td>
+                            {usesColor ? <td className="px-3 py-2">{variant.color}</td> : null}
                             <td className="px-3 py-2">{displayVariantSize(variant.size)}</td>
                             <td className="px-3 py-2">
                               <input
@@ -491,7 +523,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
             <div className="rounded-md border border-line bg-white p-4 shadow-panel">
               <p className="text-sm font-semibold text-moss">Показатели</p>
               <dl className="mt-3 space-y-2 text-sm">
-                <Row label="Цвета" value={colors.length} />
+                <Row label="Цвета" value={usesColor ? colors.length : 0} />
                 <Row label="Фото" value={product.photos.length} />
                 <Row label="Варианты" value={product.variants.length} />
                 <Row label="К синхронизации" value={product.variants.filter((variant) => variant.needsSync).length} />

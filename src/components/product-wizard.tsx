@@ -5,6 +5,19 @@ import { useRouter } from "next/navigation";
 import { Check, ImagePlus, Plus, Search, Star, Trash2, UploadCloud } from "lucide-react";
 import type { ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
+import {
+  APPAREL_PRESETS,
+  COLOR_MODES,
+  DEFAULT_APPAREL_PRESET,
+  DEFAULT_COLOR_MODE,
+  NO_COLOR_LABEL,
+  apparelPresetByLabel,
+  apparelPresetLabel,
+  colorModeByLabel,
+  colorModeLabel,
+  getApparelPreset,
+  getColorMode,
+} from "@/lib/apparel";
 import { displayVariantSize, findFieldByRole, getFieldRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
 import { DEFAULT_PRODUCT_DESCRIPTION_HTML } from "@/lib/defaults";
 import { makeSku } from "@/lib/variants";
@@ -57,6 +70,8 @@ export function ProductWizard() {
   const [form, setForm] = useState({
     title: "",
     brand: "",
+    apparelPreset: DEFAULT_APPAREL_PRESET,
+    colorMode: DEFAULT_COLOR_MODE,
     basePrice: 0,
     avitoCategorySlug: "",
     avitoCategoryName: "",
@@ -78,6 +93,10 @@ export function ProductWizard() {
   const sizeField = findFieldByRole(fields, "size");
   const brandField = findFieldByRole(fields, "brand");
   const categoryFields = fields.filter((field) => !isVariantField(field) && !isProductCoreField(field));
+  const selectedPreset = getApparelPreset(form.apparelPreset);
+  const selectedColorMode = getColorMode(form.colorMode);
+  const colorModeOption = COLOR_MODES.find((mode) => mode.id === selectedColorMode) ?? COLOR_MODES[0];
+  const usesColor = selectedColorMode !== "NONE";
   const plannedVariants = useMemo(
     () => buildPlannedVariants(groups, sizeField, form.basePrice, form.title),
     [groups, sizeField, form.basePrice, form.title],
@@ -126,28 +145,32 @@ export function ProductWizard() {
     setToast("");
     try {
       const avitoFields = syncCoreFields(form.avitoFields);
+      const isColorless = getColorMode(form.colorMode) === "NONE";
       const payload = await requestJson<{ product: { id: string } }>("/api/products/bulk", {
         method: "POST",
         body: JSON.stringify({
           title: form.title,
           brand: form.brand,
           supplierId: form.supplierId || null,
+          apparelPreset: form.apparelPreset,
+          colorMode: form.colorMode,
           basePrice: form.basePrice,
           avitoCategorySlug: form.avitoCategorySlug,
           avitoCategoryName: form.avitoCategoryName,
           avitoFields,
           colorGroups: groups.map((group) => {
             const rows = variantRowsForGroup(group, sizeField, form.basePrice);
+            const colorValue = isColorless ? NO_COLOR_LABEL : group.avitoColorValue || group.color;
             return {
-              color: group.color,
+              color: isColorless ? NO_COLOR_LABEL : group.color,
               supplierId: group.supplierId || null,
-              avitoColorValue: group.avitoColorValue || group.color,
+              avitoColorValue: isColorless ? null : colorValue,
               basePrice: group.price || form.basePrice,
               defaultStockQty: group.stockQty,
               description: group.description,
               avitoFields: {
                 ...group.avitoFields,
-                ...(colorField ? { [colorField.key]: group.avitoColorValue || group.color } : {}),
+                ...(!isColorless && colorField ? { [colorField.key]: colorValue } : {}),
               },
               sizes: sizeField ? group.sizes : [oneSizeValue],
               variants: rows.map((row) => ({
@@ -169,7 +192,7 @@ export function ProductWizard() {
       for (const group of groups) {
         if (!group.photos.length) continue;
         const data = new FormData();
-        data.append("color", group.avitoColorValue || group.color);
+        data.append("color", isColorless ? "" : group.avitoColorValue || group.color);
         group.photos.forEach((file) => data.append("files", file));
         await fetch(`/api/products/${payload.product.id}/photos`, { method: "POST", body: data });
       }
@@ -204,6 +227,12 @@ export function ProductWizard() {
     setGroups((items) => items.map((group) => ({ ...group, sizes: normalized })));
   }
 
+  function applyColorMode(label: string) {
+    const colorMode = colorModeByLabel(label);
+    setForm((item) => ({ ...item, colorMode }));
+    setGroups((items) => normalizeGroupsForColorMode(items, colorMode, form.basePrice));
+  }
+
   return (
     <>
       <PageHeader
@@ -225,12 +254,28 @@ export function ProductWizard() {
               <TextField label="Название как на Avito" value={form.title} onChange={(title) => setForm((item) => ({ ...item, title }))} />
               <TextField label="Бренд" value={form.brand} onChange={(brand) => setForm((item) => ({ ...item, brand }))} />
               <NumberField label="Базовая цена" value={form.basePrice} onChange={(basePrice) => setForm((item) => ({ ...item, basePrice }))} />
+              <SelectField
+                label="Тип одежды"
+                value={apparelPresetLabel(form.apparelPreset)}
+                options={APPAREL_PRESETS.map((preset) => preset.label)}
+                onChange={(label) => setForm((item) => ({ ...item, apparelPreset: apparelPresetByLabel(label).id }))}
+              />
+              <SelectField
+                label="Режим цвета"
+                value={colorModeLabel(form.colorMode)}
+                options={COLOR_MODES.map((mode) => mode.label)}
+                onChange={applyColorMode}
+              />
               <SupplierSelect
                 label="Поставщик по умолчанию"
                 value={form.supplierId}
                 suppliers={suppliers}
                 onChange={(supplierId) => setForm((item) => ({ ...item, supplierId }))}
               />
+            </div>
+            <div className="mt-4 grid gap-2 md:grid-cols-2">
+              {selectedPreset.hint ? <p className="rounded-md bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">{selectedPreset.hint}</p> : null}
+              <p className="rounded-md bg-canvas p-3 text-xs font-semibold leading-5 text-moss">{colorModeOption.hint}</p>
             </div>
           </section>
 
@@ -284,10 +329,12 @@ export function ProductWizard() {
           <section className="rounded-md border border-line bg-white p-5 shadow-panel">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <SectionHeading title="4. Цвета, размеры и фото" text="Каждая активная ячейка матрицы станет отдельным объявлением Avito." />
-              <Button tone="secondary" onClick={() => setGroups((items) => [...items, makeGroup("Новый цвет", form.basePrice)])}>
-                <Plus className="h-4 w-4" />
-                Добавить цвет
-              </Button>
+              {selectedColorMode === "MULTI" ? (
+                <Button tone="secondary" onClick={() => setGroups((items) => [...items, makeGroup("Новый цвет", form.basePrice)])}>
+                  <Plus className="h-4 w-4" />
+                  Добавить цвет
+                </Button>
+              ) : null}
             </div>
 
             <SizePresetBar field={sizeField} onApply={applyPreset} />
@@ -301,6 +348,7 @@ export function ProductWizard() {
                   groupsCount={groups.length}
                   colorField={colorField}
                   sizeField={sizeField}
+                  colorMode={selectedColorMode}
                   basePrice={form.basePrice}
                   suppliers={suppliers}
                   onRemove={() => setGroups((items) => items.filter((item) => item.id !== group.id))}
@@ -326,7 +374,7 @@ export function ProductWizard() {
                 <thead className="bg-canvas text-xs uppercase text-moss">
                   <tr>
                     <th className="px-3 py-2 text-left">SKU / Id</th>
-                    <th className="px-3 py-2 text-left">Цвет</th>
+                    {usesColor ? <th className="px-3 py-2 text-left">Цвет</th> : null}
                     <th className="px-3 py-2 text-left">Размер</th>
                     <th className="px-3 py-2 text-left">Цена</th>
                     <th className="px-3 py-2 text-left">Остаток</th>
@@ -337,7 +385,7 @@ export function ProductWizard() {
                   {activeVariants.slice(0, 40).map((variant) => (
                     <tr key={`${variant.groupId}-${variant.size}`}>
                       <td className="px-3 py-2 font-mono text-xs">{variant.sku}</td>
-                      <td className="px-3 py-2">{variant.color}</td>
+                      {usesColor ? <td className="px-3 py-2">{variant.color}</td> : null}
                       <td className="px-3 py-2">{displayVariantSize(variant.size)}</td>
                       <td className="px-3 py-2">{variant.price}</td>
                       <td className="px-3 py-2">{variant.stockQty}</td>
@@ -346,7 +394,7 @@ export function ProductWizard() {
                   ))}
                   {!activeVariants.length ? (
                     <tr>
-                      <td className="px-3 py-8 text-center text-moss" colSpan={6}>
+                      <td className="px-3 py-8 text-center text-moss" colSpan={usesColor ? 6 : 5}>
                         Включите хотя бы одну ячейку с остатком больше 0.
                       </td>
                     </tr>
@@ -364,7 +412,7 @@ export function ProductWizard() {
             <p className="mt-2 text-3xl font-semibold">{activeVariants.length}</p>
             <p className="mt-1 text-sm text-moss">активных объявлений будет отправлено в Avito</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <Summary label="Цветов" value={groups.length} />
+              <Summary label="Цветов" value={usesColor ? groups.length : "без цвета"} />
               <Summary label="Всего ячеек" value={plannedVariants.length} />
               <Summary label="Фото" value={totalPhotos} />
               <Summary label="Ошибок" value={validationErrors.length} />
@@ -406,6 +454,7 @@ function ColorGroupCard({
   groupsCount,
   colorField,
   sizeField,
+  colorMode,
   basePrice,
   suppliers,
   onChange,
@@ -416,12 +465,15 @@ function ColorGroupCard({
   groupsCount: number;
   colorField?: AvitoCatalogField;
   sizeField?: AvitoCatalogField;
+  colorMode: "MULTI" | "SINGLE" | "NONE";
   basePrice: number;
   suppliers: ClientSupplier[];
   onChange: (patch: Partial<ColorGroupDraft>) => void;
   onRemove: () => void;
 }) {
   const activeRows = variantRowsForGroup(group, sizeField, basePrice).filter((row) => row.enabled && row.stockQty > 0);
+  const usesColor = colorMode !== "NONE";
+  const canRemove = colorMode === "MULTI" && groupsCount > 1;
   function movePhotoFirst(index: number) {
     const photo = group.photos[index];
     if (!photo) return;
@@ -432,17 +484,17 @@ function ColorGroupCard({
     <div className="rounded-md border border-line bg-canvas p-4">
       <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-semibold">Цвет #{index + 1}: {group.avitoColorValue || group.color || "без названия"}</p>
+          <p className="font-semibold">{usesColor ? `Цвет #${index + 1}: ${group.avitoColorValue || group.color || "без названия"}` : "Фото и размеры без цвета"}</p>
           <p className="mt-1 text-xs text-moss">{activeRows.length} активных объявлений · {group.photos.length} фото</p>
         </div>
-        <Button tone="danger" disabled={groupsCount === 1} onClick={onRemove}>
+        <Button tone="danger" disabled={!canRemove} onClick={onRemove}>
           <Trash2 className="h-4 w-4" />
           Удалить
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        {colorField ? (
+        {!usesColor ? null : colorField ? (
           <AvitoFieldControl
             field={colorField}
             value={group.avitoColorValue || group.color}
@@ -453,13 +505,13 @@ function ColorGroupCard({
         )}
         <NumberField label="Цена цвета" value={group.price || basePrice} onChange={(price) => onChange({ price })} />
         <NumberField label="Остаток на размер" value={group.stockQty} onChange={(stockQty) => onChange({ stockQty })} />
-        <SupplierSelect label="Поставщик цвета" value={group.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ supplierId })} />
+        {usesColor ? <SupplierSelect label="Поставщик цвета" value={group.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ supplierId })} /> : null}
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <label className="flex min-h-[132px] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-line bg-white p-4 text-center">
           <ImagePlus className="h-9 w-9 text-sea" />
-          <span className="mt-2 text-sm font-semibold">Фото этого цвета</span>
+          <span className="mt-2 text-sm font-semibold">{usesColor ? "Фото этого цвета" : "Общие фото товара"}</span>
           <span className="mt-1 text-xs text-moss">{group.photos.length ? `${group.photos.length} файлов выбрано` : "Нажмите для выбора"}</span>
           <input
             className="sr-only"
@@ -502,7 +554,7 @@ function ColorGroupCard({
       </div>
 
       <label className="mt-4 block">
-        <span className="mb-1 block text-xs font-semibold text-moss">Описание для этого цвета</span>
+        <span className="mb-1 block text-xs font-semibold text-moss">{usesColor ? "Описание для этого цвета" : "Описание для товара"}</span>
         <textarea
           className="min-h-[84px] w-full rounded-md border-line text-sm"
           value={group.description}
@@ -769,6 +821,26 @@ function makeGroup(color: string, price = 0): ColorGroupDraft {
     supplierId: "",
     photos: [],
   };
+}
+
+function normalizeGroupsForColorMode(groups: ColorGroupDraft[], colorMode: "MULTI" | "SINGLE" | "NONE", basePrice: number): ColorGroupDraft[] {
+  const first = groups[0] ?? makeGroup("Белый", basePrice);
+  if (colorMode === "NONE") {
+    return [
+      {
+        ...first,
+        color: NO_COLOR_LABEL,
+        avitoColorValue: "",
+        supplierId: "",
+        avitoFields: {},
+      },
+    ];
+  }
+
+  const normalizedFirst = first.color === NO_COLOR_LABEL ? { ...first, color: "Белый", avitoColorValue: "Белый" } : first;
+  if (colorMode === "SINGLE") return [normalizedFirst];
+  if (groups.length > 1) return groups.map((group) => (group.color === NO_COLOR_LABEL ? { ...group, color: "Белый", avitoColorValue: "Белый" } : group));
+  return [normalizedFirst, makeGroup("Черный", basePrice)];
 }
 
 function SupplierSelect({

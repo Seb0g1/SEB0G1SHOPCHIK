@@ -91,6 +91,9 @@ describe("avito excel export", () => {
     expect(rows[0].imageUrls).not.toContain("common.jpg");
     expect(rows[1].imageUrls).toContain("black.jpg");
     expect(rows[1].avitoId).toBe("8193053827");
+    expect(rows.every((row) => row.joinAds === "Да")).toBe(true);
+    expect(new Set(rows.map((row) => row.multiAdName))).toEqual(new Set([product.title]));
+    expect(new Set(rows.map((row) => row.title))).toEqual(new Set([product.title]));
   });
 
   it("keeps selected primary photo first in image URLs", () => {
@@ -161,6 +164,47 @@ describe("avito excel export", () => {
     expect(rows[0].description).toContain("<strong>");
   });
 
+  it("maps apparel presets to Avito product type and subtype", () => {
+    const cases = [
+      ["TSHIRT", "Кофты и футболки", "Футболка"],
+      ["POLO", "Кофты и футболки", "Поло"],
+      ["HOODIE", "Кофты и футболки", "Худи"],
+      ["SWEATSHIRT", "Кофты и футболки", "Свитшот"],
+      ["SWEATER", "Кофты и футболки", "Свитер"],
+      ["TRACK_JACKET", "Кофты и футболки", "Толстовка"],
+      ["LONGSLEEVE", "Кофты и футболки", "Футболка"],
+      ["PANTS", "Брюки", ""],
+    ];
+
+    for (const [apparelPreset, productType, subtype] of cases) {
+      const rows = buildAvitoExcelRows([{ ...product, apparelPreset, avitoFieldsJson: "{}" }], settings);
+      expect(rows[0].productType).toBe(productType);
+      expect(rows[0].subtype).toBe(subtype);
+    }
+  });
+
+  it("supports colorless export with empty Avito color columns", () => {
+    const rows = buildAvitoExcelRows(
+      [
+        {
+          ...product,
+          colorMode: "NONE",
+          colorGroups: [{ color: "Без цвета", avitoColorValue: null, description: "", avitoFieldsJson: "{}", sortOrder: 0 }],
+          variants: [{ ...product.variants[0], color: "Без цвета" }],
+          photos: [{ color: null, publicUrl: "/api/uploads/product-1/common.jpg", sortOrder: 0 }],
+        },
+      ],
+      settings,
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe(product.title);
+    expect(rows[0].color).toBe("");
+    expect(rows[0].manufacturerColor).toBe("");
+    expect(rows[0].imageUrls).toContain("common.jpg");
+    expect(rows[0].description).not.toContain("Цвет:");
+  });
+
   it("writes rows into the official Avito workbook template", async () => {
     const buffer = await generateAvitoExcel([product], settings);
     const zip = await JSZip.loadAsync(buffer);
@@ -172,7 +216,9 @@ describe("avito excel export", () => {
     expect(xml).not.toContain("inlineStr");
     expect(cellValue(xml ?? "", sharedStrings, "A5")).toBe("AV-NOCTA-WHITE-M");
     expect(cellValue(xml ?? "", sharedStrings, "F5")).toBe("https://amsterdam2.sebog1.ru/api/uploads/product-1/white.jpg");
-    expect(cellValue(xml ?? "", sharedStrings, "H5")).toBe("Футболка Nike Forza Nocta (Белый)");
+    expect(cellValue(xml ?? "", sharedStrings, "H5")).toBe("Футболка Nike Forza Nocta");
+    expect(cellValue(xml ?? "", sharedStrings, "S5")).toBe("Да");
+    expect(cellValue(xml ?? "", sharedStrings, "T5")).toBe("Футболка Nike Forza Nocta");
     expect(cellValue(xml ?? "", sharedStrings, "V5")).toBe("48 (M)");
     expect(cellValue(xml ?? "", sharedStrings, "A6")).toBe("AV-NOCTA-BLACK-S");
     expect(cellValue(xml ?? "", sharedStrings, "V6")).toBe("46 (S)");
