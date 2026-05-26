@@ -6,6 +6,7 @@ import { ImagePlus, PackagePlus, Save, Send, Sparkles, UploadCloud } from "lucid
 import type { ClientProduct, ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { displayVariantSize, findFieldByRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
+import { describePublicationReportStatus } from "@/lib/publication-status";
 import { Button, NumberField, PageHeader, SelectField, StatusPill, TextField, requestJson } from "@/components/ui-kit";
 import { AvitoFieldControl, DynamicFields, LinkedSizePicker } from "@/components/product-wizard";
 
@@ -420,7 +421,7 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
                         <StatusPill status={run.status} />
                         <span className="text-sm text-moss">{new Date(run.submittedAt).toLocaleString("ru-RU")}</span>
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-moss">{run.reportStatus || "Нет отчета"}</p>
+                      <p className="mt-2 text-sm font-semibold text-moss">{describePublicationReportStatus(run.reportStatus)}</p>
                       {[...run.errors, ...run.warnings].map((item) => (
                         <p key={item} className="mt-2 text-sm text-moss">
                           {item}

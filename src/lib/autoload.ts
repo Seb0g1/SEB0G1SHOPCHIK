@@ -6,6 +6,8 @@ import { getRawAvitoSettings, upsertAvitoSettings } from "@/lib/settings";
 import { validateProductForApi } from "@/lib/product-validation";
 import { defaultFeedUrl, parseJsonList } from "@/lib/serializers";
 
+class ManualAutoloadStop extends Error {}
+
 export async function submitProductToAutoload(productId: string) {
   const product = await prisma.productTemplate.findUnique({
     where: { id: productId },
@@ -36,35 +38,68 @@ export async function submitProductToAutoload(productId: string) {
       const feedUrl = settings.publicFeedUrl || defaultFeedUrl();
       const reportEmail = settings.autoloadReportEmail || settings.email || "supportautoload@avito.ru";
       const schedule = parseSchedule(settings.autoloadScheduleJson);
+      let profileSynced = false;
+      let uploadStarted = false;
 
-      await client.syncAutoloadProfile({
-        feedUrl,
-        reportEmail,
-        schedule,
-        enabled: true,
-      });
-      events.push("Autoload profile synced.");
+      try {
+        await client.syncAutoloadProfile({
+          feedUrl,
+          reportEmail,
+          schedule,
+          enabled: true,
+        });
+        profileSynced = true;
+        events.push("Autoload profile synced.");
+      } catch (profileError) {
+        if (!isCapabilityUnavailable(profileError)) throw profileError;
+        const message = manualAutoloadProfileMessage(feedUrl, profileError);
+        warnings.push(message);
+        reportStatus = "autoload_profile_manual_setup_required";
+        await recordAutomationEvent("autoload_profile", "WARNING", message, { productId, feedUrl });
+      }
 
-      await client.triggerAutoloadUpload();
-      events.push("Autoload upload started.");
+      try {
+        await client.triggerAutoloadUpload();
+        uploadStarted = true;
+        events.push("Autoload upload started.");
+      } catch (uploadError) {
+        const message = readableAvitoError(uploadError);
+        warnings.push(message);
+        if (profileSynced) {
+          warnings.push("Профиль Autoload сохранен, но принудительный запуск upload недоступен. Avito сможет забрать фид по расписанию, если Autoload включен в кабинете.");
+          reportStatus = isCapabilityUnavailable(uploadError) ? "profile_synced_upload_unavailable" : "profile_synced_upload_error";
+        } else {
+          warnings.push(manualAutoloadUploadMessage(feedUrl));
+          runStatus = "READY_FOR_API";
+          reportStatus = isCapabilityUnavailable(uploadError) ? "api_capability_unavailable" : "api_error";
+          await recordAutomationEvent("autoload_submit", "WARNING", message, { productId, status: reportStatus });
+          throw new ManualAutoloadStop();
+        }
+      }
 
-      rawReport = await client.getAutoloadLastReport().catch(() => null);
-      if (rawReport) {
-        reportStatus = extractReportStatus(rawReport) || "upload_started";
-        const reportMessages = extractReportMessages(rawReport);
-        warnings.push(...reportMessages.warnings);
-        errors.push(...reportMessages.errors);
-      } else {
-        reportStatus = "upload_started_report_pending";
+      if (uploadStarted) {
+        rawReport = await client.getAutoloadLastReport().catch(() => null);
+        if (rawReport) {
+          reportStatus = extractReportStatus(rawReport) || "upload_started";
+          const reportMessages = extractReportMessages(rawReport);
+          warnings.push(...reportMessages.warnings);
+          errors.push(...reportMessages.errors);
+        } else {
+          reportStatus = "upload_started_report_pending";
+        }
       }
 
       runStatus = errors.length ? "ERROR" : warnings.length ? "WARNING" : "SUBMITTED";
     } catch (error) {
-      const message = readableAvitoError(error);
-      warnings.push(message);
-      runStatus = "READY_FOR_API";
-      reportStatus = error instanceof AvitoApiError && [403, 404].includes(error.status) ? "api_capability_unavailable" : "api_error";
-      await recordAutomationEvent("autoload_submit", "WARNING", message, { productId, status: reportStatus });
+      if (error instanceof ManualAutoloadStop) {
+        // Warnings already explain the manual Autoload setup path.
+      } else {
+        const message = readableAvitoError(error);
+        warnings.push(message);
+        runStatus = "READY_FOR_API";
+        reportStatus = error instanceof AvitoApiError && [403, 404].includes(error.status) ? "api_capability_unavailable" : "api_error";
+        await recordAutomationEvent("autoload_submit", "WARNING", message, { productId, status: reportStatus });
+      }
     }
   }
 
@@ -137,9 +172,10 @@ export async function syncAutoloadProfile() {
     await recordAutomationEvent("autoload_profile", "OK", "Autoload profile synced.", payload);
     return { ok: true, payload };
   } catch (error) {
-    const message = readableAvitoError(error);
+    const feedUrl = settings.publicFeedUrl || defaultFeedUrl();
+    const message = isCapabilityUnavailable(error) ? manualAutoloadProfileMessage(feedUrl, error) : readableAvitoError(error);
     await recordAutomationEvent("autoload_profile", "ERROR", message);
-    return { ok: false, message };
+    return { ok: false, status: isCapabilityUnavailable(error) ? "autoload_profile_manual_setup_required" : "api_error", message, feedUrl };
   }
 }
 
@@ -209,6 +245,28 @@ export async function recordAutomationEvent(task: string, status: string, messag
 function readableAvitoError(error: unknown): string {
   if (error instanceof AvitoApiError) return explainAvitoError(error);
   return error instanceof Error ? error.message : "Unknown Avito API error";
+}
+
+function isCapabilityUnavailable(error: unknown) {
+  return error instanceof AvitoApiError && [0, 403, 404].includes(error.status);
+}
+
+function manualAutoloadProfileMessage(feedUrl: string, error: unknown) {
+  return [
+    "Avito не дал приложению доступ к управлению профилем Autoload через API.",
+    "Это не ошибка товара: ключи работают, но этот метод закрыт для приложения, аккаунта или тарифа.",
+    `Что сделать: откройте в кабинете Avito раздел Автозагрузка и вручную укажите feed URL ${feedUrl}.`,
+    "После ручной настройки SEB0G1SHOPCHIK продолжит готовить товары, фид и отчеты по доступным API.",
+    `Деталь Avito: ${readableAvitoError(error)}`,
+  ].join(" ");
+}
+
+function manualAutoloadUploadMessage(feedUrl: string) {
+  return [
+    "Принудительный запуск Autoload upload через API тоже недоступен.",
+    `Товар и XML-фид готовы, но для публикации нужно включить автозагрузку в кабинете Avito и указать feed URL ${feedUrl}.`,
+    "Если Avito выдаст доступ к Autoload upload/profile позже, эта же кнопка начнет отправлять товар автоматически.",
+  ].join(" ");
 }
 
 function parseSchedule(value: string): unknown[] {

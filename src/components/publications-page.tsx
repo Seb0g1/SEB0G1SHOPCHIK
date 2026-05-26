@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { describePublicationReportStatus } from "@/lib/publication-status";
 import { PageHeader, StatusPill } from "@/components/ui-kit";
 
 export type PublicationListItem = {
@@ -37,7 +38,7 @@ export function PublicationsPage({ runs }: { runs: PublicationListItem[] }) {
                 <StatusPill status={run.status} />
                 <p className="text-sm text-moss">{new Date(run.submittedAt).toLocaleString("ru-RU")}</p>
                 <div className="text-sm text-moss">
-                  <p>{run.reportStatus || "Нет отчета"}</p>
+                  <p>{describePublicationReportStatus(run.reportStatus)}</p>
                   {[...run.errors, ...run.warnings].slice(0, 2).map((item) => (
                     <p key={item} className="mt-1 text-red-700">
                       {item}
