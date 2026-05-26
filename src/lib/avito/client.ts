@@ -458,7 +458,7 @@ export function explainAvitoError(error: AvitoApiError): string {
     return `Официальный endpoint Avito для постоянного online не настроен или недоступен для приложения. Online отключен без браузерной имитации.${endpoint}`;
   }
   if (error.status === 0) return `Endpoint Avito API не настроен в .env.${endpoint}`;
-  if (error.status === 401) return `Avito API отклонил токен. Проверьте Client ID/Secret и подключите Avito через OAuth-кнопку в настройках.${endpoint}`;
+  if (error.status === 401) return `Avito API отклонил токен. Проверьте Client ID и Client Secret. Для персональной авторизации OAuth-страница Avito не нужна: приложение получает token через client_credentials.${endpoint}`;
   if (error.status === 403) return `Avito API недоступен для этого приложения, аккаунта или тарифа.${endpoint}`;
   if (error.status === 404) return `Avito вернул 404 по конкретному методу API. Это значит, что путь не совпадает с вашим Swagger/API catalog или раздел не подключен к приложению.${endpoint}`;
   if (error.status === 429) return `Avito API ограничил частоту запросов. Worker продолжит позже.${endpoint}`;

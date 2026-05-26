@@ -33,7 +33,7 @@ npm.cmd run worker
 - `/messages` — чаты и история автоответов.
 - `/message-rules` — правила “если сообщение содержит слова, ответить текстом”.
 - `/automation` — состояние online, отзывов, сообщений, отчетов и последние ошибки API.
-- `/settings` — Avito API, OAuth callback, контакты, Autoload и capabilities.
+- `/settings` — Avito API credentials, контакты, Autoload и capabilities.
 
 ## VPS Deploy
 
@@ -203,9 +203,9 @@ amsterdam2.sebog1.ru -> YOUR_VPS_PUBLIC_IP
 https://amsterdam2.sebog1.ru/
 ```
 
-Приложение ловит `?code=...` на корне домена и само передает его в OAuth callback для обмена на token.
+Основной режим подключения — персональная авторизация `client_credentials`: вы сохраняете Client ID и Client Secret на `/settings`, а приложение само получает token через официальный `/token` endpoint Avito API. Открывать страницу `https://www.avito.ru/oauth` вручную не нужно.
 
-Кнопка “Подключить Avito” строит OAuth-ссылку без явного `redirect_uri`: Avito берет redirect из кабинета приложения. Для этого приложения рабочий redirect закреплен как корень домена, а ручная передача `redirect_uri` может приводить к экрану Avito “Что-то пошло не так”.
+Redirect URL `https://amsterdam2.sebog1.ru/` оставлен в настройках на случай, если Avito позже включит для приложения `authorization_code` OAuth. Приложение умеет поймать `?code=...` на корне домена, но для текущего личного кабинета это не основной сценарий.
 
 Публикация идет скрыто через Autoload:
 

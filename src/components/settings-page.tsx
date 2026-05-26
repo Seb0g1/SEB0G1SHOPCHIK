@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CheckCircle2, ExternalLink, Save, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Save, ShieldCheck } from "lucide-react";
 import type { ClientAutomationState, ClientAvitoSettings } from "@/lib/client-types";
 import { Button, PageHeader, TextField, requestJson } from "@/components/ui-kit";
 
@@ -63,14 +63,6 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
     }
   }
 
-  function connectOAuth() {
-    if (!settings.clientId.trim()) {
-      setMessage("Сначала сохраните Client ID.");
-      return;
-    }
-    window.location.href = buildOAuthUrl(settings.clientId, ["user:read", "autoload:reports"]);
-  }
-
   return (
     <>
       <PageHeader
@@ -81,10 +73,6 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
             <Button tone="secondary" busy={busy === "test"} onClick={test}>
               <CheckCircle2 className="h-4 w-4" />
               Проверить
-            </Button>
-            <Button tone="secondary" onClick={connectOAuth}>
-              <ExternalLink className="h-4 w-4" />
-              Подключить Avito
             </Button>
             <Button busy={busy === "save"} onClick={save}>
               <Save className="h-4 w-4" />
@@ -97,6 +85,9 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
         <section className="space-y-6 rounded-md border border-line bg-white p-5 shadow-panel">
           <div>
             <h2 className="font-semibold">Авторизация</h2>
+            <p className="mt-2 text-sm leading-6 text-moss">
+              Для вашего приложения используется персональная авторизация Avito: Client ID + Client Secret получают токен через API. Открывать страницу Avito OAuth вручную не нужно.
+            </p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <TextField label="Client ID" value={settings.clientId} onChange={(clientId) => setSettings({ ...settings, clientId })} />
               <TextField label={settings.hasClientSecret ? "Client secret (заменить)" : "Client secret"} type="password" value={secretDraft} onChange={setSecretDraft} />
@@ -138,19 +129,23 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <div className="flex items-center gap-3">
               <ShieldCheck className="h-5 w-5 text-sea" />
-              <h2 className="font-semibold">Redirect URL Avito</h2>
+              <h2 className="font-semibold">Как подключается Avito</h2>
             </div>
-            <p className="mt-4 break-all rounded-md bg-canvas p-3 text-sm font-semibold">{settings.redirectUrl}</p>
-            <p className="mt-3 text-sm leading-6 text-moss">Для вашего приложения Avito используется корень домена. Если Avito вернет code на главную страницу, SEB0G1SHOPCHIK сам обработает его.</p>
-            <p className="mt-2 text-sm leading-6 text-moss">Кнопка подключения отправляет OAuth без явного redirect_uri: Avito берет redirect из кабинета приложения, а явная передача этого параметра может давать экран “Что-то пошло не так”.</p>
+            <p className="mt-4 rounded-md bg-canvas p-3 text-sm font-semibold">Основной режим: client_credentials</p>
+            <p className="mt-3 text-sm leading-6 text-moss">
+              Вставьте Client ID и Client Secret, нажмите “Сохранить”, затем “Проверить”. Приложение само получит token через официальный endpoint Avito API.
+            </p>
+            <p className="mt-2 text-sm leading-6 text-moss">
+              Redirect URL нужен только если Avito позже включит для приложения authorization_code OAuth. Сейчас он сохранен как справочная настройка:
+            </p>
+            <p className="mt-3 break-all rounded-md bg-canvas p-3 text-sm font-semibold">{settings.redirectUrl}</p>
           </div>
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <h2 className="font-semibold">Состояние сохранения</h2>
             <div className="mt-3 space-y-2 text-sm">
               <SettingsStatusLine label="Client ID" value={sourceLabel(settings.clientIdSource)} />
               <SettingsStatusLine label="Client secret" value={secretSourceLabel(settings)} />
-              <SettingsStatusLine label="OAuth Avito" value={settings.oauthConnected ? "подключен" : "не подключен"} />
-              <SettingsStatusLine label="OAuth истекает" value={formatSavedAt(settings.oauthExpiresAt)} />
+              <SettingsStatusLine label="Режим API" value="client_credentials" />
               <SettingsStatusLine label="Последнее сохранение" value={formatSavedAt(settings.updatedAt)} />
             </div>
             <p className="mt-3 rounded-md bg-canvas p-3 text-xs leading-5 text-moss">
@@ -175,17 +170,6 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
       </div>
     </>
   );
-}
-
-function buildOAuthUrl(clientId: string, scopes: string[]) {
-  const query = [
-    ["response_type", "code"],
-    ["client_id", clientId],
-    ["scope", scopes.join(" ")],
-  ]
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value).replace(/%20/g, "%20")}`)
-    .join("&");
-  return `https://www.avito.ru/oauth?${query}`;
 }
 
 function SettingsStatusLine({ label, value }: { label: string; value: string }) {

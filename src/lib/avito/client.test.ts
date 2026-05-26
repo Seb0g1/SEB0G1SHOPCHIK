@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AvitoApiError, AvitoClient, resetAvitoTokenCache } from "@/lib/avito/client";
+import { AvitoApiError, AvitoClient, explainAvitoError, resetAvitoTokenCache } from "@/lib/avito/client";
 
 describe("AvitoClient", () => {
   afterEach(() => {
@@ -65,6 +65,13 @@ describe("AvitoClient", () => {
 
     const body = (fetchMock.mock.calls[0]?.[1] as RequestInit).body as URLSearchParams;
     expect(body.get("redirect_uri")).toBe("https://amsterdam2.sebog1.ru/");
+  });
+
+  it("explains 401 through client_credentials instead of OAuth button", () => {
+    const message = explainAvitoError(new AvitoApiError("bad token", 401, {}, "https://api.test/token"));
+
+    expect(message).toContain("client_credentials");
+    expect(message).not.toContain("OAuth-кнопку");
   });
 
   it("uses env-configured review reply endpoint", async () => {

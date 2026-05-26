@@ -74,6 +74,8 @@ test("creates message keyword rules", async ({ page }) => {
 test("shows Avito settings persistence status", async ({ page }) => {
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Настройки Avito API" })).toBeVisible();
+  await expect(page.getByText("Основной режим: client_credentials")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Подключить Avito" })).toHaveCount(0);
   await expect(page.getByText("Состояние сохранения")).toBeVisible();
   await expect(page.getByText("Поле Client secret очищается после сохранения специально")).toBeVisible();
 });
