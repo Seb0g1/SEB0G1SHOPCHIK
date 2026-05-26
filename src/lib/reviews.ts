@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getRawAvitoSettings } from "@/lib/settings";
+import { explainAvitoCredentialStatus, getAvitoCredentialStatus, getRawAvitoSettings } from "@/lib/settings";
 import { AvitoApiError, AvitoClient, explainAvitoError } from "@/lib/avito/client";
 import {
   DEFAULT_REPLY_TEMPLATES,
@@ -149,24 +149,26 @@ export async function updateAutomationState(input: {
 export async function probeAutomationCapabilities() {
   const settings = await getRawAvitoSettings();
   if (!settings.clientId || !settings.clientSecret) {
+    const credentialStatus = await getAvitoCredentialStatus();
+    const message = explainAvitoCredentialStatus(credentialStatus) || "Заполните Client ID и Client Secret.";
     const capabilities = {
-      profile: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
-      reviews: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
-      reviewReplies: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
-      onlinePresence: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
-      orders: { available: false, status: "missing_credentials", message: "Заполните Client ID и Client Secret." },
+      profile: { available: false, status: credentialStatus.secretStatus === "invalid" ? "invalid_secret" : "missing_credentials", message },
+      reviews: { available: false, status: credentialStatus.secretStatus === "invalid" ? "invalid_secret" : "missing_credentials", message },
+      reviewReplies: { available: false, status: credentialStatus.secretStatus === "invalid" ? "invalid_secret" : "missing_credentials", message },
+      onlinePresence: { available: false, status: credentialStatus.secretStatus === "invalid" ? "invalid_secret" : "missing_credentials", message },
+      orders: { available: false, status: credentialStatus.secretStatus === "invalid" ? "invalid_secret" : "missing_credentials", message },
     };
     const state = await prisma.automationState.upsert({
       where: { id: "default" },
       create: {
         id: "default",
         status: "NEEDS_SETTINGS",
-        lastError: "Avito API credentials не заполнены.",
+        lastError: message,
         capabilitiesJson: JSON.stringify(capabilities),
       },
       update: {
         status: "NEEDS_SETTINGS",
-        lastError: "Avito API credentials не заполнены.",
+        lastError: message,
         capabilitiesJson: JSON.stringify(capabilities),
       },
     });

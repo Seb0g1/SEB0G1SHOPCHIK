@@ -6,14 +6,15 @@ const defaultCity = "Москва";
 
 export async function getAvitoSettings() {
   const settings = await prisma.avitoSettings.findUnique({ where: { id: "default" } });
-  return toClientSettings(settings);
+  return toClientSettingsWithSecretStatus(settings);
 }
 
 export async function getRawAvitoSettings() {
   const settings = await prisma.avitoSettings.findUnique({ where: { id: "default" } });
+  const decryptedSecret = decryptSecret(settings?.clientSecretEncrypted);
   return {
-    clientId: settings?.clientId ?? "",
-    clientSecret: decryptSecret(settings?.clientSecretEncrypted),
+    clientId: settings?.clientId ?? process.env.AVITO_CLIENT_ID ?? "",
+    clientSecret: decryptedSecret ?? process.env.AVITO_CLIENT_SECRET ?? "",
     avitoUserId: settings?.avitoUserId ?? process.env.AVITO_ACCOUNT_ID ?? "self",
     sellerLocation: settings?.sellerLocation ?? defaultCity,
     contactName: settings?.contactName ?? "",
@@ -43,10 +44,11 @@ export async function upsertAvitoSettings(input: {
   autoloadScheduleJson?: string;
   capabilitiesJson?: string;
 }) {
+  const trimmedSecret = input.clientSecret?.trim();
   const data = {
-    clientId: input.clientId?.trim() || null,
+    clientId: input.clientId?.trim() || process.env.AVITO_CLIENT_ID || null,
     avitoUserId: input.avitoUserId?.trim() || process.env.AVITO_ACCOUNT_ID || "self",
-    ...(input.clientSecret ? { clientSecretEncrypted: encryptSecret(input.clientSecret.trim()) } : {}),
+    ...(trimmedSecret ? { clientSecretEncrypted: encryptSecret(trimmedSecret) } : {}),
     sellerLocation: input.sellerLocation?.trim() || defaultCity,
     contactName: input.contactName?.trim() || null,
     phone: input.phone?.trim() || null,
@@ -65,5 +67,52 @@ export async function upsertAvitoSettings(input: {
     update: data,
   });
 
-  return toClientSettings(settings);
+  return toClientSettingsWithSecretStatus(settings);
+}
+
+export async function getAvitoCredentialStatus() {
+  const settings = await prisma.avitoSettings.findUnique({ where: { id: "default" } });
+  const encrypted = settings?.clientSecretEncrypted ?? "";
+  const decrypted = decryptSecret(encrypted);
+  const clientId = settings?.clientId?.trim() || process.env.AVITO_CLIENT_ID || "";
+  const envSecret = process.env.AVITO_CLIENT_SECRET || "";
+  const clientSecret = decrypted || envSecret;
+
+  return {
+    clientId,
+    hasClientId: Boolean(clientId),
+    hasClientSecret: Boolean(clientSecret),
+    secretStatus: getSecretStatus(encrypted, decrypted, envSecret),
+  };
+}
+
+export function explainAvitoCredentialStatus(status: Awaited<ReturnType<typeof getAvitoCredentialStatus>>) {
+  if (!status.hasClientId) return "Заполните Client ID.";
+  if (status.secretStatus === "invalid") {
+    return "Client secret сохранен, но не расшифровывается текущим SETTINGS_ENCRYPTION_KEY. Вставьте Client secret заново и сохраните настройки.";
+  }
+  if (!status.hasClientSecret) return "Заполните Client Secret.";
+  return "";
+}
+
+function toClientSettingsWithSecretStatus(settings: Parameters<typeof toClientSettings>[0]) {
+  const encrypted = settings?.clientSecretEncrypted ?? "";
+  const decrypted = decryptSecret(encrypted);
+  const envSecret = process.env.AVITO_CLIENT_SECRET || "";
+  const client = toClientSettings(settings);
+  const secretStatus = getSecretStatus(encrypted, decrypted, envSecret);
+
+  return {
+    ...client,
+    clientId: client.clientId || process.env.AVITO_CLIENT_ID || "",
+    hasClientSecret: secretStatus === "ok" || secretStatus === "env",
+    secretStatus,
+  };
+}
+
+function getSecretStatus(encrypted: string | null | undefined, decrypted: string | null | undefined, envSecret: string) {
+  if (decrypted) return "ok" as const;
+  if (envSecret) return "env" as const;
+  if (encrypted) return "invalid" as const;
+  return "empty" as const;
 }

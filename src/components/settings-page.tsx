@@ -29,7 +29,7 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
       });
       setSettings(payload.settings);
       setSecretDraft("");
-      setMessage("Настройки сохранены.");
+      setMessage(payload.settings.secretStatus === "invalid" ? "Настройки сохранены, но Client secret нужно вставить заново." : "Настройки сохранены.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить настройки");
     } finally {
@@ -79,6 +79,7 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
               <TextField label="Avito User ID / accountId" value={settings.avitoUserId} onChange={(avitoUserId) => setSettings({ ...settings, avitoUserId })} />
               <TextField label="Redirect URL" value={settings.redirectUrl} onChange={(redirectUrl) => setSettings({ ...settings, redirectUrl })} />
             </div>
+            <SecretStatus status={settings.secretStatus} />
           </div>
 
           <div>
@@ -148,4 +149,27 @@ function CapabilityLine({ label, value }: { label: string; value: unknown }) {
       </span>
     </p>
   );
+}
+
+function SecretStatus({ status }: { status: ClientAvitoSettings["secretStatus"] }) {
+  const map = {
+    ok: {
+      className: "border-emerald-100 bg-emerald-50 text-emerald-700",
+      text: "Client secret сохранен и читается текущим ключом шифрования.",
+    },
+    env: {
+      className: "border-sky-100 bg-sky-50 text-sky-700",
+      text: "Client secret берется из AVITO_CLIENT_SECRET в .env.",
+    },
+    invalid: {
+      className: "border-red-100 bg-red-50 text-red-700",
+      text: "Client secret есть в базе, но не расшифровывается. Скорее всего изменился SETTINGS_ENCRYPTION_KEY. Вставьте secret заново и сохраните.",
+    },
+    empty: {
+      className: "border-amber-100 bg-amber-50 text-amber-700",
+      text: "Client secret не заполнен.",
+    },
+  }[status];
+
+  return <p className={`mt-3 rounded-md border p-3 text-sm font-semibold ${map.className}`}>{map.text}</p>;
 }

@@ -65,6 +65,8 @@ SETTINGS_ENCRYPTION_KEY=put-a-long-random-secret-here
 AVITO_API_BASE_URL=https://api.avito.ru
 AVITO_REDIRECT_URL=https://amsterdam2.sebog1.ru/api/avito/oauth/callback
 AVITO_ACCOUNT_ID=self
+AVITO_CLIENT_ID=
+AVITO_CLIENT_SECRET=
 
 AVITO_AUTOLOAD_PROFILE_PATH=/autoload/v2/profile
 AVITO_AUTOLOAD_UPLOAD_PATH=/autoload/v1/upload
@@ -100,7 +102,7 @@ OPENAI_MODEL=gpt-4.1-mini
 openssl rand -base64 48
 ```
 
-Client ID и Client Secret можно ввести на странице `/settings`; они сохраняются в SQLite, secret шифруется.
+Client ID и Client Secret можно ввести на странице `/settings`; они сохраняются в SQLite, secret шифруется. Если меняли `SETTINGS_ENCRYPTION_KEY`, старый secret нужно вставить заново. Альтернатива для VPS — задать `AVITO_CLIENT_ID` и `AVITO_CLIENT_SECRET` прямо в `.env`.
 
 ### 3. Запуск Docker
 

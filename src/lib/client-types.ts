@@ -142,6 +142,7 @@ export type ClientSupplierTask = {
 export type ClientAvitoSettings = {
   clientId: string;
   hasClientSecret: boolean;
+  secretStatus: "empty" | "ok" | "invalid" | "env";
   sellerLocation: string;
   contactName: string;
   phone: string;

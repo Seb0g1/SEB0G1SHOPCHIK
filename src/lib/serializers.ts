@@ -238,8 +238,9 @@ export function toClientSettings(settings: {
   capabilitiesJson?: string | null;
 } | null): ClientAvitoSettings {
   return {
-    clientId: settings?.clientId ?? "",
+    clientId: settings?.clientId ?? process.env.AVITO_CLIENT_ID ?? "",
     hasClientSecret: Boolean(settings?.clientSecretEncrypted),
+    secretStatus: settings?.clientSecretEncrypted ? "ok" : process.env.AVITO_CLIENT_SECRET ? "env" : "empty",
     sellerLocation: settings?.sellerLocation ?? "Москва",
     contactName: settings?.contactName ?? "",
     phone: settings?.phone ?? "",

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getAvitoSettings, getRawAvitoSettings, upsertAvitoSettings } from "@/lib/settings";
+import { explainAvitoCredentialStatus, getAvitoCredentialStatus, getAvitoSettings, getRawAvitoSettings, upsertAvitoSettings } from "@/lib/settings";
 import { AvitoClient } from "@/lib/avito/client";
 import { saveCapabilities } from "@/lib/autoload";
 
@@ -32,10 +32,22 @@ export async function PATCH(request: Request) {
 }
 
 export async function POST() {
-  const settings = await getRawAvitoSettings();
-  if (!settings.clientId || !settings.clientSecret) {
-    return NextResponse.json({ ok: false, status: "missing_credentials" }, { status: 400 });
+  const credentialStatus = await getAvitoCredentialStatus();
+  if (!credentialStatus.hasClientId || !credentialStatus.hasClientSecret) {
+    const invalidSecret = credentialStatus.secretStatus === "invalid";
+    const message = explainAvitoCredentialStatus(credentialStatus);
+    return NextResponse.json(
+      {
+        ok: false,
+        status: invalidSecret ? "invalid_client_secret" : "missing_credentials",
+        message,
+        credentialStatus,
+      },
+      { status: 400 },
+    );
   }
+
+  const settings = await getRawAvitoSettings();
 
   const client = new AvitoClient({
     clientId: settings.clientId,
