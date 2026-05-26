@@ -11,6 +11,15 @@ const colorGroupSchema = z.object({
   description: z.string().optional(),
   avitoFields: z.record(z.string(), z.string()).optional(),
   sizes: z.array(z.string()).default([]),
+  variants: z
+    .array(
+      z.object({
+        size: z.string().min(1),
+        price: z.coerce.number().int().min(0),
+        stockQty: z.coerce.number().int().min(0),
+      }),
+    )
+    .optional(),
 });
 
 const schema = z.object({

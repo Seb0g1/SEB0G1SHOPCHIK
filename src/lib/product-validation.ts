@@ -9,7 +9,7 @@ export type ValidatedProduct = {
   avitoCategorySlug: string | null;
   avitoFieldsJson: string;
   variants: Array<{ sku: string; color: string; size: string; price: number; stockQty: number; publicationStatus: string }>;
-  photos: Array<{ id: string }>;
+  photos: Array<{ id: string; color?: string | null }>;
 };
 
 export function validateProductForApi(product: ValidatedProduct, fields: AvitoCatalogField[] = []): string[] {
@@ -52,6 +52,10 @@ export function validateProductForApi(product: ValidatedProduct, fields: AvitoCa
     if (!variant.color.trim()) errors.push(`У варианта ${variant.sku} не указан цвет.`);
     if (!variant.size.trim()) errors.push(`У варианта ${variant.sku} не указан размер.`);
     if (variant.price <= 0) errors.push(`У варианта ${variant.sku} цена должна быть больше нуля.`);
+    const hasPhoto = product.photos.some((photo) => !photo.color || photo.color === variant.color);
+    if (product.photos.length && !hasPhoto) {
+      errors.push(`Для цвета "${variant.color}" нет фото. Загрузите фото именно для этого цвета или общее фото товара.`);
+    }
   }
 
   return [...new Set(errors)];

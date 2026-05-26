@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ImagePlus, Plus, Search, Trash2 } from "lucide-react";
 import type { ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
-import { findFieldByRole, getFieldRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
+import { displayVariantSize, findFieldByRole, getFieldRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
 import { Button, NumberField, PageHeader, SelectField, TextField, requestJson } from "@/components/ui-kit";
 
 type CatalogResponse<T> = { data: T; source: "api" | "cache" | "fallback"; warning?: string };
@@ -17,6 +17,7 @@ type ColorGroupDraft = {
   price: number;
   stockQty: number;
   sizes: string[];
+  variantOverrides: Record<string, { price: number; stockQty: number }>;
   description: string;
   avitoFields: Record<string, string>;
   supplierId: string;
@@ -65,6 +66,10 @@ export function ProductWizard() {
   const brandField = findFieldByRole(fields, "brand");
   const categoryFields = fields.filter((field) => !isVariantField(field) && !isProductCoreField(field));
   const totalVariants = groups.reduce((sum, group) => sum + (sizeField ? group.sizes.length : 1), 0);
+  const activeVariants = groups.reduce(
+    (sum, group) => sum + variantRowsForGroup(group, sizeField, form.basePrice).filter((variant) => variant.stockQty > 0).length,
+    0,
+  );
   const totalPhotos = groups.reduce((sum, group) => sum + group.photos.length, 0);
 
   useEffect(() => {
@@ -126,6 +131,7 @@ export function ProductWizard() {
               ...(colorField ? { [colorField.key]: group.avitoColorValue || group.color } : {}),
             },
             sizes: sizeField ? group.sizes : [oneSizeValue],
+            variants: variantRowsForGroup(group, sizeField, form.basePrice),
           })),
         }),
       });
@@ -152,6 +158,16 @@ export function ProductWizard() {
     }
   }
 
+  function nextStep() {
+    const errors = validateStep(step);
+    if (errors.length) {
+      setToast(errors[0]);
+      return;
+    }
+    setToast("");
+    setStep((item) => Math.min(steps.length - 1, item + 1));
+  }
+
   function syncCoreFields(values: Record<string, string>) {
     return {
       ...values,
@@ -171,8 +187,44 @@ export function ProductWizard() {
     if (groups.some((group) => !group.color.trim())) errors.push("У каждого цвета должно быть название.");
     if (groups.some((group) => group.price <= 0 && form.basePrice <= 0)) errors.push("У каждого цвета должна быть цена.");
     if (sizeField?.required && groups.some((group) => group.sizes.length === 0)) errors.push("Выберите размеры для каждого цвета.");
+    if (!groups.some((group) => variantRowsForGroup(group, sizeField, form.basePrice).some((variant) => variant.stockQty > 0))) {
+      errors.push("Укажите остаток больше 0 хотя бы для одного размера.");
+    }
+    if (groups.some((group) => variantRowsForGroup(group, sizeField, form.basePrice).some((variant) => variant.price <= 0))) {
+      errors.push("Цена каждого активного варианта должна быть больше 0.");
+    }
     if (groups.some((group) => group.photos.length === 0)) errors.push("Загрузите фото для каждого цвета.");
     return errors;
+  }
+
+  function validateStep(currentStep: number) {
+    if (currentStep === 0) {
+      return [
+        !form.title.trim() ? "Укажите название товара." : "",
+        form.basePrice <= 0 ? "Укажите базовую цену больше нуля." : "",
+      ].filter(Boolean);
+    }
+    if (currentStep === 1) {
+      return [!form.avitoCategorySlug ? "Выберите конечную категорию Avito." : ""].filter(Boolean);
+    }
+    if (currentStep === 2) {
+      return fields.length && fields.some((field) => field.required && !fieldValuePresent(field))
+        ? ["Заполните обязательные поля Avito."]
+        : [];
+    }
+    if (currentStep === 3) {
+      const matrixErrors = new Set([
+        "Добавьте минимум один цвет.",
+        "У каждого цвета должно быть название.",
+        "У каждого цвета должна быть цена.",
+        "Выберите размеры для каждого цвета.",
+        "Укажите остаток больше 0 хотя бы для одного размера.",
+        "Цена каждого активного варианта должна быть больше 0.",
+        "Загрузите фото для каждого цвета.",
+      ]);
+      return localValidate().filter((error) => matrixErrors.has(error));
+    }
+    return [];
   }
 
   function fieldValuePresent(field: AvitoCatalogField) {
@@ -306,6 +358,7 @@ export function ProductWizard() {
                 <Summary label="Категория" value={form.avitoCategoryName || "Не выбрана"} />
                 <Summary label="Цветов" value={groups.length} />
                 <Summary label="Вариантов" value={totalVariants} />
+                <Summary label="К выгрузке" value={activeVariants} />
                 <Summary label="Фото" value={totalPhotos} />
               </div>
             </div>
@@ -317,7 +370,7 @@ export function ProductWizard() {
               Назад
             </Button>
             {step < steps.length - 1 ? (
-              <Button onClick={() => setStep((item) => Math.min(steps.length - 1, item + 1))}>
+              <Button onClick={nextStep}>
                 Далее
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -409,6 +462,14 @@ function ColorMatrix({
                   </p>
                 )}
               </div>
+              <div className="md:col-span-4">
+                <VariantMatrix
+                  group={group}
+                  sizeField={sizeField}
+                  basePrice={basePrice}
+                  onChange={(variantOverrides) => update(group.id, { variantOverrides })}
+                />
+              </div>
               <label className="block md:col-span-4">
                 <span className="mb-1 block text-xs font-semibold text-moss">Описание именно для этого цвета</span>
                 <textarea
@@ -425,6 +486,78 @@ function ColorMatrix({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function VariantMatrix({
+  group,
+  sizeField,
+  basePrice,
+  onChange,
+}: {
+  group: ColorGroupDraft;
+  sizeField?: AvitoCatalogField;
+  basePrice: number;
+  onChange: (overrides: ColorGroupDraft["variantOverrides"]) => void;
+}) {
+  const rows = variantRowsForGroup(group, sizeField, basePrice);
+  if (!rows.length) {
+    return <p className="rounded-md border border-line bg-white p-3 text-sm text-moss">Выберите размеры, чтобы увидеть матрицу цены и остатков.</p>;
+  }
+
+  function patch(size: string, patch: { price?: number; stockQty?: number }) {
+    const current = group.variantOverrides[size] ?? {
+      price: group.price || basePrice,
+      stockQty: group.stockQty,
+    };
+    onChange({
+      ...group.variantOverrides,
+      [size]: {
+        price: patch.price ?? current.price,
+        stockQty: patch.stockQty ?? current.stockQty,
+      },
+    });
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-md border border-line bg-white">
+      <table className="min-w-[520px] w-full divide-y divide-line text-sm">
+        <thead className="bg-canvas text-xs uppercase text-moss">
+          <tr>
+            <th className="px-3 py-2 text-left">Размер</th>
+            <th className="px-3 py-2 text-left">Цена</th>
+            <th className="px-3 py-2 text-left">Остаток</th>
+            <th className="px-3 py-2 text-left">Статус</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((row) => (
+            <tr key={row.size}>
+              <td className="px-3 py-2 font-semibold">{displayVariantSize(row.size)}</td>
+              <td className="px-3 py-2">
+                <input
+                  className="h-9 w-28 rounded-md border-line text-sm"
+                  min={0}
+                  type="number"
+                  value={row.price}
+                  onChange={(event) => patch(row.size, { price: Number(event.target.value) })}
+                />
+              </td>
+              <td className="px-3 py-2">
+                <input
+                  className="h-9 w-24 rounded-md border-line text-sm"
+                  min={0}
+                  type="number"
+                  value={row.stockQty}
+                  onChange={(event) => patch(row.size, { stockQty: Number(event.target.value) })}
+                />
+              </td>
+              <td className="px-3 py-2 text-xs font-semibold text-moss">{row.stockQty > 0 ? "пойдет в Avito" : "не выгружать"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -572,6 +705,7 @@ function makeGroup(color: string, price = 0): ColorGroupDraft {
     price,
     stockQty: 1,
     sizes: [],
+    variantOverrides: {},
     description: "",
     avitoFields: {},
     supplierId: "",
@@ -621,6 +755,19 @@ function Summary({ label, value }: { label: string; value: string | number }) {
       <p className="mt-2 break-words font-semibold">{value}</p>
     </div>
   );
+}
+
+function variantRowsForGroup(group: ColorGroupDraft, sizeField: AvitoCatalogField | undefined, basePrice: number) {
+  const sizes = sizeField ? group.sizes : [oneSizeValue];
+  const defaultPrice = group.price || basePrice;
+  return sizes.map((size) => {
+    const override = group.variantOverrides[size];
+    return {
+      size,
+      price: Math.max(0, Math.round(override?.price ?? defaultPrice)),
+      stockQty: Math.max(0, Math.round(override?.stockQty ?? group.stockQty)),
+    };
+  });
 }
 
 function normalizeFormForFields<T extends { brand: string; avitoFields: Record<string, string> }>(form: T, fields: AvitoCatalogField[]): T {

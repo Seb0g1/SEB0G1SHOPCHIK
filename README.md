@@ -82,7 +82,7 @@ AVITO_REVIEW_REPLY_PATH=/ratings/v1/reviews/{reviewId}/reply
 AVITO_MESSENGER_CHATS_PATH=/messenger/v2/accounts/{accountId}/chats
 AVITO_MESSENGER_MESSAGES_PATH=/messenger/v3/accounts/{accountId}/chats/{chatId}/messages
 AVITO_MESSENGER_SEND_PATH=/messenger/v1/accounts/{accountId}/chats/{chatId}/messages
-AVITO_ONLINE_PRESENCE_PATH=/messenger/v1/accounts/{accountId}/online
+AVITO_ONLINE_PRESENCE_PATH=disabled
 AVITO_ORDERS_LIST_PATH=/order-management/1/orders
 AVITO_ORDER_DETAIL_PATH=/order-management/1/orders/{orderId}
 

@@ -189,6 +189,7 @@ export async function createBulkProduct(input: {
     description?: string;
     avitoFields?: Record<string, string>;
     sizes: string[];
+    variants?: Array<{ size: string; price: number; stockQty: number }>;
   }>;
 }) {
   const product = await prisma.productTemplate.create({
@@ -221,15 +222,23 @@ export async function createBulkProduct(input: {
 
   for (const group of input.colorGroups) {
     const color = group.avitoColorValue?.trim() || group.color.trim();
-    const sizes = group.sizes.length ? group.sizes : ["ONE_SIZE"];
-    await generateVariants(product.id, {
-      title: product.title,
-      color,
-      sizes,
-      price: group.basePrice ?? product.basePrice,
-      stockQty: group.defaultStockQty ?? 1,
-      variantFields: group.avitoFields ?? {},
-    });
+    const variants = group.variants?.length
+      ? group.variants
+      : (group.sizes.length ? group.sizes : ["ONE_SIZE"]).map((size) => ({
+          size,
+          price: group.basePrice ?? product.basePrice,
+          stockQty: group.defaultStockQty ?? 1,
+        }));
+    for (const variant of variants) {
+      await generateVariants(product.id, {
+        title: product.title,
+        color,
+        sizes: [variant.size],
+        price: variant.price,
+        stockQty: variant.stockQty,
+        variantFields: group.avitoFields ?? {},
+      });
+    }
   }
 
   return getProduct(product.id);

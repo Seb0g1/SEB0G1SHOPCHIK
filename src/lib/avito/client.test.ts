@@ -57,6 +57,39 @@ describe("AvitoClient", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("https://api.test/custom/reviews/review%201/reply");
     expect((fetchMock.mock.calls[1][1] as RequestInit).body).toBe(JSON.stringify({ text: "Спасибо" }));
   });
+
+  it("falls back to built-in order endpoint when compose passes an empty env value", async () => {
+    vi.stubEnv("AVITO_ORDERS_LIST_PATH", "");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: "token-1", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ orders: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new AvitoClient({ clientId: "id", clientSecret: "secret", baseUrl: "https://api.test" });
+    await client.getOrders({ limit: 1 });
+
+    expect(fetchMock.mock.calls[1][0]).toBe("https://api.test/order-management/1/orders?limit=1");
+  });
+
+  it("does not call an undocumented online endpoint by default", async () => {
+    const client = new AvitoClient({ clientId: "id", clientSecret: "secret", baseUrl: "https://api.test" });
+
+    await expect(client.setOnlinePresence()).rejects.toMatchObject({
+      status: 0,
+      endpoint: "AVITO_ONLINE_PRESENCE_PATH",
+    });
+  });
+
+  it("treats the old placeholder online endpoint as disabled", async () => {
+    vi.stubEnv("AVITO_ONLINE_PRESENCE_PATH", "/messenger/v1/accounts/{accountId}/online");
+    const client = new AvitoClient({ clientId: "id", clientSecret: "secret", baseUrl: "https://api.test" });
+
+    await expect(client.setOnlinePresence()).rejects.toMatchObject({
+      status: 0,
+      endpoint: "AVITO_ONLINE_PRESENCE_PATH",
+    });
+  });
 });
 
 function jsonResponse(payload: unknown, status = 200) {

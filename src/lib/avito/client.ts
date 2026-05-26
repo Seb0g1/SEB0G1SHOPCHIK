@@ -217,7 +217,16 @@ export class AvitoClient {
   }
 
   async setOnlinePresence(): Promise<unknown> {
-    const path = configuredPath("AVITO_ONLINE_PRESENCE_PATH", "/messenger/v1/accounts/{accountId}/online", {
+    const rawOnlinePath = process.env.AVITO_ONLINE_PRESENCE_PATH?.trim();
+    if (!rawOnlinePath || rawOnlinePath === "/messenger/v1/accounts/{accountId}/online") {
+      throw new AvitoApiError(
+        "AVITO_ONLINE_PRESENCE_PATH is not configured.",
+        0,
+        { code: "endpoint_not_configured", envName: "AVITO_ONLINE_PRESENCE_PATH" },
+        "AVITO_ONLINE_PRESENCE_PATH",
+      );
+    }
+    const path = configuredPath("AVITO_ONLINE_PRESENCE_PATH", "", {
       accountId: this.accountId,
     });
     return this.requestConfigured(path, {
@@ -354,8 +363,12 @@ async function probeCapability(action: () => Promise<unknown>): Promise<Capabili
 }
 
 function configuredPath(envName: string, fallback: string, values: Record<string, string>): string {
-  const raw = process.env[envName];
-  if (raw !== undefined && raw.trim() === "") {
+  const raw = process.env[envName]?.trim();
+  if (raw && ["disabled", "off", "none", "false"].includes(raw.toLowerCase())) {
+    throw new AvitoApiError(`${envName} is not configured.`, 0, { code: "endpoint_not_configured", envName }, envName);
+  }
+
+  if (!raw && !fallback) {
     throw new AvitoApiError(`${envName} is not configured.`, 0, { code: "endpoint_not_configured", envName }, envName);
   }
 
@@ -363,8 +376,8 @@ function configuredPath(envName: string, fallback: string, values: Record<string
 }
 
 function configuredPathAvailable(envName: string): boolean {
-  const raw = process.env[envName];
-  return raw === undefined || raw.trim().length > 0;
+  const raw = process.env[envName]?.trim().toLowerCase();
+  return raw === undefined || !["disabled", "off", "none", "false"].includes(raw);
 }
 
 function replacePathVariables(path: string, values: Record<string, string>): string {
@@ -396,6 +409,10 @@ function normalizeAutoloadSchedule(schedule?: unknown[]): unknown[] {
 
 export function explainAvitoError(error: AvitoApiError): string {
   const endpoint = error.endpoint ? ` Путь: ${error.endpoint}.` : "";
+  const payload = error.payload && typeof error.payload === "object" ? (error.payload as Record<string, unknown>) : {};
+  if (error.status === 0 && payload.envName === "AVITO_ONLINE_PRESENCE_PATH") {
+    return `Официальный endpoint Avito для постоянного online не настроен или недоступен для приложения. Online отключен без браузерной имитации.${endpoint}`;
+  }
   if (error.status === 0) return `Endpoint Avito API не настроен в .env.${endpoint}`;
   if (error.status === 401) return `Avito API отклонил OAuth-токен. Это не API key, а OAuth client_id/client_secret. Проверьте Client ID и Client Secret.${endpoint}`;
   if (error.status === 403) return `Avito API недоступен для этого приложения, аккаунта или тарифа.${endpoint}`;
