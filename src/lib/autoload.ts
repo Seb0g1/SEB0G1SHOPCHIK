@@ -152,6 +152,8 @@ export async function submitProductToAutoload(productId: string) {
       warnings: [...new Set([...warnings, ...events])],
       status: runStatus,
       reportStatus,
+      feedUrl: settings.publicFeedUrl || defaultFeedUrl(),
+      manualSetupRequired: ["autoload_profile_manual_setup_required", "api_capability_unavailable"].includes(reportStatus),
     },
   };
 }

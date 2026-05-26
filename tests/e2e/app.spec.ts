@@ -5,7 +5,7 @@ const png = Buffer.from(
   "base64",
 );
 
-test("creates product through the Avito matrix wizard", async ({ page }) => {
+test("creates product through the modern Avito matrix wizard", async ({ page }) => {
   await page.goto("/products");
   await expect(page.getByRole("heading", { name: "SEB0G1SHOPCHIK" })).toBeVisible();
   await expect(page.getByText("XML feed")).toHaveCount(0);
@@ -13,25 +13,25 @@ test("creates product through the Avito matrix wizard", async ({ page }) => {
 
   await page.getByRole("navigation").getByRole("link", { name: "Новый товар" }).click();
   await expect(page.getByRole("heading", { name: "Массовая загрузка товара в Avito" })).toBeVisible();
-  await page.getByLabel("Название").fill(`Футболка Nike Forza Nocta ${Date.now()}`);
+  await page.getByLabel("Название как на Avito").fill(`Футболка Nike Forza Nocta ${Date.now()}`);
   await page.getByLabel("Бренд").fill("Nike");
   await page.getByLabel("Базовая цена").fill("2199");
 
-  await page.getByRole("button", { name: "Далее" }).click();
-  await page.getByRole("button", { name: "Футболки и топы" }).click();
+  await page.getByPlaceholder("Поиск категории Avito").fill("Футболки");
+  await page.getByRole("button", { name: /Футболки и топы/ }).first().click();
   await page.getByLabel("Состояние *").selectOption("Новое");
   await page.getByLabel("Пол *").selectOption("Мужская");
 
-  await page.getByRole("button", { name: "Далее" }).click();
-  await page.getByLabel("Размеры из Avito").nth(0).fill("S, M");
-  await page.getByLabel("Размеры из Avito").nth(1).fill("S, M");
+  await page.getByRole("button", { name: "XS-3XL" }).click();
   await page.locator('input[type="file"]').nth(0).setInputFiles({ name: "white.png", mimeType: "image/png", buffer: png });
   await page.locator('input[type="file"]').nth(1).setInputFiles({ name: "black.png", mimeType: "image/png", buffer: png });
-
-  await page.getByRole("button", { name: "Далее" }).click();
   await page.getByLabel("Общее описание").fill("Новая футболка, аккуратная упаковка, отправка после подтверждения.");
-  await page.getByRole("button", { name: "Создать", exact: true }).click();
+
+  await expect(page.getByText("активных объявлений будет отправлено в Avito")).toBeVisible();
+  await page.getByRole("button", { name: /Создать \d+ объявлений/ }).click();
   await expect(page.getByRole("button", { name: "Проверить и отправить" })).toBeVisible();
+  await page.getByRole("button", { name: "Матрица" }).click();
+  await expect(page.getByText("AV-", { exact: false }).first()).toBeVisible();
 });
 
 test("manages reviews, templates and automation pages", async ({ page }) => {

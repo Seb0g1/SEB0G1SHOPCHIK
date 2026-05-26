@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, ImagePlus, Plus, Search, Trash2 } from "lucide-react";
+import { Check, ImagePlus, Plus, Search, Trash2, UploadCloud } from "lucide-react";
 import type { ClientSupplier } from "@/lib/client-types";
 import type { AvitoCatalogField, AvitoCategoryNode } from "@/lib/avito/catalog";
 import { displayVariantSize, findFieldByRole, getFieldRole, isProductCoreField, isVariantField } from "@/lib/avito/field-utils";
+import { makeSku } from "@/lib/variants";
 import { Button, NumberField, PageHeader, SelectField, TextField, requestJson } from "@/components/ui-kit";
 
 type CatalogResponse<T> = { data: T; source: "api" | "cache" | "fallback"; warning?: string };
@@ -17,19 +18,33 @@ type ColorGroupDraft = {
   price: number;
   stockQty: number;
   sizes: string[];
-  variantOverrides: Record<string, { price: number; stockQty: number }>;
+  variantOverrides: Record<string, { price: number; stockQty: number; enabled: boolean }>;
   description: string;
   avitoFields: Record<string, string>;
   supplierId: string;
   photos: File[];
 };
 
-const steps = ["Основное", "Категория Avito", "Поля Avito", "Цвета и размеры", "Проверка"];
+type PlannedVariant = {
+  groupId: string;
+  color: string;
+  size: string;
+  price: number;
+  stockQty: number;
+  enabled: boolean;
+  sku: string;
+  photoCount: number;
+};
+
 const oneSizeValue = "ONE_SIZE";
+const sizePresets = [
+  { label: "XS-3XL", sizes: ["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL"] },
+  { label: "44-56", sizes: ["44", "46", "48", "50", "52", "54", "56"] },
+  { label: "Без размера", sizes: [oneSizeValue] },
+];
 
 export function ProductWizard() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
@@ -48,29 +63,31 @@ export function ProductWizard() {
     supplierId: "",
     description: "",
   });
-  const [groups, setGroups] = useState<ColorGroupDraft[]>([
-    makeGroup("Белый"),
-    makeGroup("Черный"),
-  ]);
+  const [groups, setGroups] = useState<ColorGroupDraft[]>([makeGroup("Белый"), makeGroup("Черный")]);
 
   const flatCategories = useMemo(() => flattenCategories(tree), [tree]);
   const visibleCategories = useMemo(() => {
     const query = categoryQuery.trim().toLowerCase();
     const items = flatCategories.filter((category) => category.children.length === 0 || query);
-    if (!query) return items.slice(0, 80);
-    return items.filter((category) => category.path.toLowerCase().includes(query)).slice(0, 80);
+    if (!query) return items.slice(0, 70);
+    return items.filter((category) => category.path.toLowerCase().includes(query)).slice(0, 70);
   }, [flatCategories, categoryQuery]);
 
   const colorField = findFieldByRole(fields, "color");
   const sizeField = findFieldByRole(fields, "size");
   const brandField = findFieldByRole(fields, "brand");
   const categoryFields = fields.filter((field) => !isVariantField(field) && !isProductCoreField(field));
-  const totalVariants = groups.reduce((sum, group) => sum + (sizeField ? group.sizes.length : 1), 0);
-  const activeVariants = groups.reduce(
-    (sum, group) => sum + variantRowsForGroup(group, sizeField, form.basePrice).filter((variant) => variant.stockQty > 0).length,
-    0,
+  const plannedVariants = useMemo(
+    () => buildPlannedVariants(groups, sizeField, form.basePrice, form.title),
+    [groups, sizeField, form.basePrice, form.title],
   );
+  const activeVariants = plannedVariants.filter((variant) => variant.enabled && variant.stockQty > 0);
   const totalPhotos = groups.reduce((sum, group) => sum + group.photos.length, 0);
+  const validationErrors = useMemo(
+    () => validateWizard({ form, groups, fields, sizeField, plannedVariants }),
+    [form, groups, fields, sizeField, plannedVariants],
+  );
+  const feedUrl = "/api/avito/feed.xml";
 
   useEffect(() => {
     requestJson<{ suppliers: ClientSupplier[] }>("/api/suppliers")
@@ -99,9 +116,8 @@ export function ProductWizard() {
   }, [form.avitoCategorySlug]);
 
   async function finish() {
-    const errors = localValidate();
-    if (errors.length) {
-      setToast(errors[0]);
+    if (validationErrors.length) {
+      setToast(validationErrors[0]);
       return;
     }
 
@@ -119,20 +135,28 @@ export function ProductWizard() {
           avitoCategorySlug: form.avitoCategorySlug,
           avitoCategoryName: form.avitoCategoryName,
           avitoFields,
-          colorGroups: groups.map((group) => ({
-            color: group.color,
-            supplierId: group.supplierId || null,
-            avitoColorValue: group.avitoColorValue || group.color,
-            basePrice: group.price || form.basePrice,
-            defaultStockQty: group.stockQty,
-            description: group.description,
-            avitoFields: {
-              ...group.avitoFields,
-              ...(colorField ? { [colorField.key]: group.avitoColorValue || group.color } : {}),
-            },
-            sizes: sizeField ? group.sizes : [oneSizeValue],
-            variants: variantRowsForGroup(group, sizeField, form.basePrice),
-          })),
+          colorGroups: groups.map((group) => {
+            const rows = variantRowsForGroup(group, sizeField, form.basePrice);
+            return {
+              color: group.color,
+              supplierId: group.supplierId || null,
+              avitoColorValue: group.avitoColorValue || group.color,
+              basePrice: group.price || form.basePrice,
+              defaultStockQty: group.stockQty,
+              description: group.description,
+              avitoFields: {
+                ...group.avitoFields,
+                ...(colorField ? { [colorField.key]: group.avitoColorValue || group.color } : {}),
+              },
+              sizes: sizeField ? group.sizes : [oneSizeValue],
+              variants: rows.map((row) => ({
+                size: row.size,
+                price: row.price,
+                stockQty: row.enabled ? row.stockQty : 0,
+                active: row.enabled,
+              })),
+            };
+          }),
         }),
       });
 
@@ -158,16 +182,6 @@ export function ProductWizard() {
     }
   }
 
-  function nextStep() {
-    const errors = validateStep(step);
-    if (errors.length) {
-      setToast(errors[0]);
-      return;
-    }
-    setToast("");
-    setStep((item) => Math.min(steps.length - 1, item + 1));
-  }
-
   function syncCoreFields(values: Record<string, string>) {
     return {
       ...values,
@@ -175,63 +189,18 @@ export function ProductWizard() {
     };
   }
 
-  function localValidate() {
-    const errors: string[] = [];
-    if (!form.title.trim()) errors.push("Укажите название как в Avito.");
-    if (form.basePrice <= 0) errors.push("Укажите базовую цену больше нуля.");
-    if (!form.avitoCategorySlug) errors.push("Выберите конечную категорию Avito.");
-    if (fields.length && fields.some((field) => field.required && !fieldValuePresent(field))) {
-      errors.push("Заполните обязательные поля Avito.");
-    }
-    if (!groups.length) errors.push("Добавьте минимум один цвет.");
-    if (groups.some((group) => !group.color.trim())) errors.push("У каждого цвета должно быть название.");
-    if (groups.some((group) => group.price <= 0 && form.basePrice <= 0)) errors.push("У каждого цвета должна быть цена.");
-    if (sizeField?.required && groups.some((group) => group.sizes.length === 0)) errors.push("Выберите размеры для каждого цвета.");
-    if (!groups.some((group) => variantRowsForGroup(group, sizeField, form.basePrice).some((variant) => variant.stockQty > 0))) {
-      errors.push("Укажите остаток больше 0 хотя бы для одного размера.");
-    }
-    if (groups.some((group) => variantRowsForGroup(group, sizeField, form.basePrice).some((variant) => variant.price <= 0))) {
-      errors.push("Цена каждого активного варианта должна быть больше 0.");
-    }
-    if (groups.some((group) => group.photos.length === 0)) errors.push("Загрузите фото для каждого цвета.");
-    return errors;
+  function selectCategory(category: AvitoCategoryNode) {
+    setForm((item) => ({
+      ...item,
+      avitoCategorySlug: category.slug,
+      avitoCategoryName: category.path,
+      avitoFields: {},
+    }));
   }
 
-  function validateStep(currentStep: number) {
-    if (currentStep === 0) {
-      return [
-        !form.title.trim() ? "Укажите название товара." : "",
-        form.basePrice <= 0 ? "Укажите базовую цену больше нуля." : "",
-      ].filter(Boolean);
-    }
-    if (currentStep === 1) {
-      return [!form.avitoCategorySlug ? "Выберите конечную категорию Avito." : ""].filter(Boolean);
-    }
-    if (currentStep === 2) {
-      return fields.length && fields.some((field) => field.required && !fieldValuePresent(field))
-        ? ["Заполните обязательные поля Avito."]
-        : [];
-    }
-    if (currentStep === 3) {
-      const matrixErrors = new Set([
-        "Добавьте минимум один цвет.",
-        "У каждого цвета должно быть название.",
-        "У каждого цвета должна быть цена.",
-        "Выберите размеры для каждого цвета.",
-        "Укажите остаток больше 0 хотя бы для одного размера.",
-        "Цена каждого активного варианта должна быть больше 0.",
-        "Загрузите фото для каждого цвета.",
-      ]);
-      return localValidate().filter((error) => matrixErrors.has(error));
-    }
-    return [];
-  }
-
-  function fieldValuePresent(field: AvitoCatalogField) {
-    const role = getFieldRole(field);
-    if (role === "brand") return Boolean(form.brand.trim());
-    if (role === "color" || role === "size") return true;
-    return Boolean(String(form.avitoFields[field.key] ?? "").trim());
+  function applyPreset(sizes: string[]) {
+    const normalized = normalizePresetSizes(sizes, sizeField);
+    setGroups((items) => items.map((group) => ({ ...group, sizes: normalized })));
   }
 
   return (
@@ -240,44 +209,21 @@ export function ProductWizard() {
         eyebrow="Новый товар"
         title="Массовая загрузка товара в Avito"
         actions={
-          step === steps.length - 1 ? (
-            <Button busy={busy} onClick={finish}>
-              <Check className="h-4 w-4" />
-              Создать товар
-            </Button>
-          ) : null
+          <Button busy={busy} disabled={Boolean(validationErrors.length)} onClick={finish}>
+            <Check className="h-4 w-4" />
+            Создать товар
+          </Button>
         }
       />
-      <div className="grid gap-4 p-4 xl:grid-cols-[270px_minmax(0,1fr)] xl:p-6">
-        <aside className="rounded-md border border-line bg-white p-3 shadow-panel">
-          {steps.map((label, index) => (
-            <button
-              key={label}
-              className={`flex h-11 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-semibold ${
-                step === index ? "bg-teal-50 text-sea" : "text-zinc-700 hover:bg-canvas"
-              }`}
-              type="button"
-              onClick={() => setStep(index)}
-            >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-line text-xs">{index + 1}</span>
-              {label}
-            </button>
-          ))}
-          <div className="mt-4 rounded-md bg-canvas p-3 text-xs leading-5 text-moss">
-            Источник справочника: <span className="font-semibold uppercase">{catalogSource}</span>
-            {catalogWarning ? <p className="mt-2 text-amber-700">{catalogWarning}</p> : null}
-          </div>
-        </aside>
 
-        <section className="rounded-md border border-line bg-white p-5 shadow-panel">
-          {step === 0 ? (
-            <div className="space-y-5">
-              <Intro title="Основные данные" text="Один товар = один бренд и одна категория. Цвета и размеры добавляются дальше матрицей." />
-              <div className="grid gap-4 md:grid-cols-3">
-                <TextField label="Название" value={form.title} onChange={(title) => setForm((item) => ({ ...item, title }))} />
-                <TextField label="Бренд" value={form.brand} onChange={(brand) => setForm((item) => ({ ...item, brand }))} />
-                <NumberField label="Базовая цена" value={form.basePrice} onChange={(basePrice) => setForm((item) => ({ ...item, basePrice }))} />
-              </div>
+      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:p-6">
+        <main className="space-y-4">
+          <section className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <SectionHeading title="1. Основа товара" text="Один внутренний товар будет развернут в отдельные объявления по цветам и размерам." />
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <TextField label="Название как на Avito" value={form.title} onChange={(title) => setForm((item) => ({ ...item, title }))} />
+              <TextField label="Бренд" value={form.brand} onChange={(brand) => setForm((item) => ({ ...item, brand }))} />
+              <NumberField label="Базовая цена" value={form.basePrice} onChange={(basePrice) => setForm((item) => ({ ...item, basePrice }))} />
               <SupplierSelect
                 label="Поставщик по умолчанию"
                 value={form.supplierId}
@@ -285,207 +231,262 @@ export function ProductWizard() {
                 onChange={(supplierId) => setForm((item) => ({ ...item, supplierId }))}
               />
             </div>
-          ) : null}
+          </section>
 
-          {step === 1 ? (
-            <div className="space-y-4">
-              <Intro title="Категория из Avito API" text="Выбирайте конечную категорию. От нее зависят обязательные поля, цвета и размеры." />
-              <label className="relative block">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-moss" />
-                <input
-                  className="h-10 w-full rounded-md border-line pl-9 text-sm"
-                  placeholder="Поиск по дереву Avito"
-                  value={categoryQuery}
-                  onChange={(event) => setCategoryQuery(event.target.value)}
-                />
-              </label>
-              <div className="max-h-[420px] overflow-y-auto rounded-md border border-line">
-                {visibleCategories.map((category) => (
-                  <button
-                    key={category.slug}
-                    className={`block w-full border-b border-line px-3 py-3 text-left text-sm last:border-b-0 ${
-                      category.slug === form.avitoCategorySlug ? "bg-teal-50 text-sea" : "bg-white hover:bg-canvas"
-                    }`}
-                    type="button"
-                    onClick={() => {
-                      setForm((item) => ({
-                        ...item,
-                        avitoCategorySlug: category.slug,
-                        avitoCategoryName: category.path,
-                        avitoFields: {},
-                      }));
-                      setStep(2);
-                    }}
-                  >
-                    <span className="font-semibold">{category.name}</span>
-                    <span className="mt-1 block text-xs text-moss">{category.path}</span>
-                  </button>
-                ))}
+          <section className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <SectionHeading title="2. Категория Avito" text="Категория определяет обязательные поля, доступные цвета и размеры." />
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+              <div>
+                <label className="relative block">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-moss" />
+                  <input
+                    className="h-10 w-full rounded-md border-line pl-9 text-sm"
+                    placeholder="Поиск категории Avito"
+                    value={categoryQuery}
+                    onChange={(event) => setCategoryQuery(event.target.value)}
+                  />
+                </label>
+                <div className="mt-3 max-h-[290px] overflow-y-auto rounded-md border border-line">
+                  {visibleCategories.map((category) => (
+                    <button
+                      key={category.slug}
+                      className={`block w-full border-b border-line px-3 py-3 text-left text-sm last:border-b-0 ${
+                        category.slug === form.avitoCategorySlug ? "bg-teal-50 text-sea" : "bg-white hover:bg-canvas"
+                      }`}
+                      type="button"
+                      onClick={() => selectCategory(category)}
+                    >
+                      <span className="font-semibold">{category.name}</span>
+                      <span className="mt-1 block text-xs text-moss">{category.path}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-md border border-line bg-canvas p-4">
+                <p className="text-xs font-semibold uppercase text-moss">Выбрано</p>
+                <p className="mt-2 text-sm font-semibold">{form.avitoCategoryName || "Категория еще не выбрана"}</p>
+                <p className="mt-4 text-xs leading-5 text-moss">
+                  Источник справочника: <span className="font-semibold uppercase">{catalogSource}</span>
+                </p>
+                {catalogWarning ? <p className="mt-2 text-xs leading-5 text-amber-700">{catalogWarning}</p> : null}
               </div>
             </div>
-          ) : null}
+          </section>
 
-          {step === 2 ? (
-            <div className="space-y-4">
-              <Intro title="Поля выбранной категории" text="Это параметры, которые Avito вернул для выбранной категории. Обязательные отмечены звездочкой." />
+          <section className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <SectionHeading title="3. Поля Avito" text="Заполните обязательные параметры выбранной категории. Цвет и размер берутся из матрицы ниже." />
+            <div className="mt-4">
               <DynamicFields fields={categoryFields} values={form.avitoFields} onChange={(avitoFields) => setForm((item) => ({ ...item, avitoFields }))} />
             </div>
-          ) : null}
+          </section>
 
-          {step === 3 ? (
-            <ColorMatrix
-              colorField={colorField}
-              sizeField={sizeField}
-              groups={groups}
-              basePrice={form.basePrice}
-              suppliers={suppliers}
-              onChange={setGroups}
-            />
-          ) : null}
-
-          {step === 4 ? (
-            <div className="space-y-4">
-              <Intro title="Проверка перед созданием" text="Проверьте матрицу. После создания товар можно отправить в Avito через скрытый Autoload API-flow." />
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-moss">Общее описание</span>
-                <textarea
-                  className="min-h-[160px] w-full rounded-md border-line text-sm"
-                  value={form.description}
-                  onChange={(event) => setForm((item) => ({ ...item, description: event.target.value }))}
-                />
-              </label>
-              <div className="grid gap-3 md:grid-cols-4">
-                <Summary label="Категория" value={form.avitoCategoryName || "Не выбрана"} />
-                <Summary label="Цветов" value={groups.length} />
-                <Summary label="Вариантов" value={totalVariants} />
-                <Summary label="К выгрузке" value={activeVariants} />
-                <Summary label="Фото" value={totalPhotos} />
-              </div>
+          <section className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <SectionHeading title="4. Цвета, размеры и фото" text="Каждая активная ячейка матрицы станет отдельным объявлением Avito." />
+              <Button tone="secondary" onClick={() => setGroups((items) => [...items, makeGroup("Новый цвет", form.basePrice)])}>
+                <Plus className="h-4 w-4" />
+                Добавить цвет
+              </Button>
             </div>
-          ) : null}
 
-          <div className="mt-6 flex flex-wrap justify-between gap-2 border-t border-line pt-4">
-            <Button tone="secondary" disabled={step === 0} onClick={() => setStep((item) => Math.max(0, item - 1))}>
-              <ArrowLeft className="h-4 w-4" />
-              Назад
-            </Button>
-            {step < steps.length - 1 ? (
-              <Button onClick={nextStep}>
-                Далее
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+            <SizePresetBar field={sizeField} onApply={applyPreset} />
+
+            <div className="mt-4 space-y-4">
+              {groups.map((group, index) => (
+                <ColorGroupCard
+                  key={group.id}
+                  group={group}
+                  index={index}
+                  groupsCount={groups.length}
+                  colorField={colorField}
+                  sizeField={sizeField}
+                  basePrice={form.basePrice}
+                  suppliers={suppliers}
+                  onRemove={() => setGroups((items) => items.filter((item) => item.id !== group.id))}
+                  onChange={(patch) => setGroups((items) => items.map((item) => (item.id === group.id ? { ...item, ...patch } : item)))}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <SectionHeading title="5. Описание и предпросмотр" text="Описание будет вставлено в каждое объявление с добавлением цвета, размера, артикула и остатка." />
+            <label className="mt-4 block">
+              <span className="mb-1 block text-xs font-semibold text-moss">Общее описание</span>
+              <textarea
+                className="min-h-[150px] w-full rounded-md border-line text-sm"
+                value={form.description}
+                onChange={(event) => setForm((item) => ({ ...item, description: event.target.value }))}
+              />
+            </label>
+
+            <div className="mt-4 overflow-x-auto rounded-md border border-line">
+              <table className="min-w-[780px] w-full divide-y divide-line text-sm">
+                <thead className="bg-canvas text-xs uppercase text-moss">
+                  <tr>
+                    <th className="px-3 py-2 text-left">SKU / Id</th>
+                    <th className="px-3 py-2 text-left">Цвет</th>
+                    <th className="px-3 py-2 text-left">Размер</th>
+                    <th className="px-3 py-2 text-left">Цена</th>
+                    <th className="px-3 py-2 text-left">Остаток</th>
+                    <th className="px-3 py-2 text-left">Фото</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {activeVariants.slice(0, 40).map((variant) => (
+                    <tr key={`${variant.groupId}-${variant.size}`}>
+                      <td className="px-3 py-2 font-mono text-xs">{variant.sku}</td>
+                      <td className="px-3 py-2">{variant.color}</td>
+                      <td className="px-3 py-2">{displayVariantSize(variant.size)}</td>
+                      <td className="px-3 py-2">{variant.price}</td>
+                      <td className="px-3 py-2">{variant.stockQty}</td>
+                      <td className="px-3 py-2">{variant.photoCount}</td>
+                    </tr>
+                  ))}
+                  {!activeVariants.length ? (
+                    <tr>
+                      <td className="px-3 py-8 text-center text-moss" colSpan={6}>
+                        Включите хотя бы одну ячейку с остатком больше 0.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            {activeVariants.length > 40 ? <p className="mt-2 text-xs text-moss">Показаны первые 40 объявлений из {activeVariants.length}.</p> : null}
+          </section>
+        </main>
+
+        <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+          <div className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <p className="text-xs font-semibold uppercase text-moss">Готовность</p>
+            <p className="mt-2 text-3xl font-semibold">{activeVariants.length}</p>
+            <p className="mt-1 text-sm text-moss">активных объявлений будет отправлено в Avito</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Summary label="Цветов" value={groups.length} />
+              <Summary label="Всего ячеек" value={plannedVariants.length} />
+              <Summary label="Фото" value={totalPhotos} />
+              <Summary label="Ошибок" value={validationErrors.length} />
+            </div>
+            <p className="mt-4 break-all rounded-md bg-canvas p-3 text-xs font-semibold">{feedUrl}</p>
+            <p className="mt-2 text-xs leading-5 text-moss">Если Avito не даст доступ к Autoload profile, этот feed URL нужно вставить вручную в кабинете Авито.</p>
+          </div>
+
+          <div className="rounded-md border border-line bg-white p-5 shadow-panel">
+            <p className="font-semibold">Проверка</p>
+            {validationErrors.length ? (
+              <div className="mt-3 space-y-2">
+                {validationErrors.slice(0, 6).map((error) => (
+                  <p key={error} className="rounded-md bg-red-50 p-2 text-xs font-semibold leading-5 text-red-700">
+                    {error}
+                  </p>
+                ))}
+              </div>
             ) : (
-              <Button busy={busy} onClick={finish}>
-                <Check className="h-4 w-4" />
-                Создать
-              </Button>
+              <p className="mt-3 rounded-md bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">Можно создавать товар и отправлять в Avito.</p>
             )}
           </div>
-          {toast ? <p className="mt-4 rounded-md bg-red-50 p-3 text-sm font-semibold text-red-700">{toast}</p> : null}
-        </section>
+
+          <Button className="w-full" busy={busy} disabled={Boolean(validationErrors.length)} onClick={finish}>
+            <UploadCloud className="h-4 w-4" />
+            Создать {activeVariants.length} объявлений
+          </Button>
+
+          {toast ? <p className="rounded-md bg-ink p-3 text-sm font-semibold text-white">{toast}</p> : null}
+        </aside>
       </div>
     </>
   );
 }
 
-function ColorMatrix({
+function ColorGroupCard({
+  group,
+  index,
+  groupsCount,
   colorField,
   sizeField,
-  groups,
   basePrice,
   suppliers,
   onChange,
+  onRemove,
 }: {
+  group: ColorGroupDraft;
+  index: number;
+  groupsCount: number;
   colorField?: AvitoCatalogField;
   sizeField?: AvitoCatalogField;
-  groups: ColorGroupDraft[];
   basePrice: number;
   suppliers: ClientSupplier[];
-  onChange: (groups: ColorGroupDraft[]) => void;
+  onChange: (patch: Partial<ColorGroupDraft>) => void;
+  onRemove: () => void;
 }) {
-  function update(id: string, patch: Partial<ColorGroupDraft>) {
-    onChange(groups.map((group) => (group.id === id ? { ...group, ...patch } : group)));
-  }
+  const activeRows = variantRowsForGroup(group, sizeField, basePrice).filter((row) => row.enabled && row.stockQty > 0);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <Intro title="Цветовые группы и размеры" text="Для каждого цвета задайте свои фото, цену и размеры. Все размеры пойдут отдельными вариантами." />
-        <Button tone="secondary" onClick={() => onChange([...groups, makeGroup("Новый цвет", basePrice)])}>
-          <Plus className="h-4 w-4" />
-          Цвет
+    <div className="rounded-md border border-line bg-canvas p-4">
+      <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="font-semibold">Цвет #{index + 1}: {group.avitoColorValue || group.color || "без названия"}</p>
+          <p className="mt-1 text-xs text-moss">{activeRows.length} активных объявлений · {group.photos.length} фото</p>
+        </div>
+        <Button tone="danger" disabled={groupsCount === 1} onClick={onRemove}>
+          <Trash2 className="h-4 w-4" />
+          Удалить
         </Button>
       </div>
-      <div className="space-y-4">
-        {groups.map((group, index) => (
-          <div key={group.id} className="rounded-md border border-line bg-canvas p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="font-semibold">Цвет #{index + 1}</p>
-              <Button tone="danger" disabled={groups.length === 1} onClick={() => onChange(groups.filter((item) => item.id !== group.id))}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="grid gap-4 md:grid-cols-4">
-              {colorField ? (
-                <AvitoFieldControl
-                  field={colorField}
-                  value={group.avitoColorValue || group.color}
-                  onChange={(value) => update(group.id, { color: value, avitoColorValue: value })}
-                />
-              ) : (
-                <TextField label="Цвет" value={group.color} onChange={(color) => update(group.id, { color, avitoColorValue: color })} />
-              )}
-              <NumberField label="Цена цвета" value={group.price || basePrice} onChange={(price) => update(group.id, { price })} />
-              <NumberField label="Остаток на размер" value={group.stockQty} onChange={(stockQty) => update(group.id, { stockQty })} />
-              <SupplierSelect
-                label="Поставщик цвета"
-                value={group.supplierId}
-                suppliers={suppliers}
-                onChange={(supplierId) => update(group.id, { supplierId })}
-              />
-              <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-moss">Фото цвета</span>
-                <input
-                  className="block w-full rounded-md border border-line bg-white text-sm file:mr-3 file:h-10 file:border-0 file:bg-sea file:px-3 file:text-sm file:font-semibold file:text-white"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(event) => update(group.id, { photos: Array.from(event.target.files ?? []) })}
-                />
-              </label>
-              <div className="md:col-span-4">
-                {sizeField ? (
-                  <LinkedSizePicker field={sizeField} selected={group.sizes} onChange={(sizes) => update(group.id, { sizes })} />
-                ) : (
-                  <p className="rounded-md border border-line bg-white p-3 text-sm text-moss">
-                    В этой категории Avito не вернул размерное поле. Будет создан один вариант без размера.
-                  </p>
-                )}
-              </div>
-              <div className="md:col-span-4">
-                <VariantMatrix
-                  group={group}
-                  sizeField={sizeField}
-                  basePrice={basePrice}
-                  onChange={(variantOverrides) => update(group.id, { variantOverrides })}
-                />
-              </div>
-              <label className="block md:col-span-4">
-                <span className="mb-1 block text-xs font-semibold text-moss">Описание именно для этого цвета</span>
-                <textarea
-                  className="min-h-[90px] w-full rounded-md border-line text-sm"
-                  value={group.description}
-                  onChange={(event) => update(group.id, { description: event.target.value })}
-                />
-              </label>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-moss">
-              <span className="rounded bg-white px-2 py-1">{sizeField ? group.sizes.length : 1} вариантов</span>
-              <span className="rounded bg-white px-2 py-1">{group.photos.length} фото</span>
-            </div>
-          </div>
-        ))}
+
+      <div className="grid gap-4 md:grid-cols-4">
+        {colorField ? (
+          <AvitoFieldControl
+            field={colorField}
+            value={group.avitoColorValue || group.color}
+            onChange={(value) => onChange({ color: value, avitoColorValue: value })}
+          />
+        ) : (
+          <TextField label="Цвет" value={group.color} onChange={(color) => onChange({ color, avitoColorValue: color })} />
+        )}
+        <NumberField label="Цена цвета" value={group.price || basePrice} onChange={(price) => onChange({ price })} />
+        <NumberField label="Остаток на размер" value={group.stockQty} onChange={(stockQty) => onChange({ stockQty })} />
+        <SupplierSelect label="Поставщик цвета" value={group.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ supplierId })} />
       </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <label className="flex min-h-[132px] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-line bg-white p-4 text-center">
+          <ImagePlus className="h-9 w-9 text-sea" />
+          <span className="mt-2 text-sm font-semibold">Фото этого цвета</span>
+          <span className="mt-1 text-xs text-moss">{group.photos.length ? `${group.photos.length} файлов выбрано` : "Нажмите для выбора"}</span>
+          <input
+            className="sr-only"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(event) => onChange({ photos: Array.from(event.target.files ?? []) })}
+          />
+        </label>
+
+        <div className="space-y-4">
+          {sizeField ? (
+            <LinkedSizePicker field={sizeField} selected={group.sizes} onChange={(sizes) => onChange({ sizes })} />
+          ) : (
+            <p className="rounded-md border border-line bg-white p-3 text-sm text-moss">Avito не вернул поле размера для этой категории. Будет создан вариант ONE_SIZE.</p>
+          )}
+          <VariantMatrix
+            group={group}
+            sizeField={sizeField}
+            basePrice={basePrice}
+            onChange={(variantOverrides) => onChange({ variantOverrides })}
+          />
+        </div>
+      </div>
+
+      <label className="mt-4 block">
+        <span className="mb-1 block text-xs font-semibold text-moss">Описание для этого цвета</span>
+        <textarea
+          className="min-h-[84px] w-full rounded-md border-line text-sm"
+          value={group.description}
+          onChange={(event) => onChange({ description: event.target.value })}
+        />
+      </label>
     </div>
   );
 }
@@ -506,25 +507,28 @@ function VariantMatrix({
     return <p className="rounded-md border border-line bg-white p-3 text-sm text-moss">Выберите размеры, чтобы увидеть матрицу цены и остатков.</p>;
   }
 
-  function patch(size: string, patch: { price?: number; stockQty?: number }) {
+  function patch(size: string, patch: Partial<{ price: number; stockQty: number; enabled: boolean }>) {
     const current = group.variantOverrides[size] ?? {
       price: group.price || basePrice,
       stockQty: group.stockQty,
+      enabled: true,
     };
     onChange({
       ...group.variantOverrides,
       [size]: {
         price: patch.price ?? current.price,
         stockQty: patch.stockQty ?? current.stockQty,
+        enabled: patch.enabled ?? current.enabled,
       },
     });
   }
 
   return (
     <div className="overflow-x-auto rounded-md border border-line bg-white">
-      <table className="min-w-[520px] w-full divide-y divide-line text-sm">
+      <table className="min-w-[620px] w-full divide-y divide-line text-sm">
         <thead className="bg-canvas text-xs uppercase text-moss">
           <tr>
+            <th className="px-3 py-2 text-left">Вкл</th>
             <th className="px-3 py-2 text-left">Размер</th>
             <th className="px-3 py-2 text-left">Цена</th>
             <th className="px-3 py-2 text-left">Остаток</th>
@@ -533,7 +537,15 @@ function VariantMatrix({
         </thead>
         <tbody className="divide-y divide-line">
           {rows.map((row) => (
-            <tr key={row.size}>
+            <tr key={row.size} className={row.enabled ? "bg-white" : "bg-zinc-50 text-zinc-500"}>
+              <td className="px-3 py-2">
+                <input
+                  className="h-4 w-4 rounded border-line text-sea"
+                  type="checkbox"
+                  checked={row.enabled}
+                  onChange={(event) => patch(row.size, { enabled: event.target.checked })}
+                />
+              </td>
               <td className="px-3 py-2 font-semibold">{displayVariantSize(row.size)}</td>
               <td className="px-3 py-2">
                 <input
@@ -553,11 +565,31 @@ function VariantMatrix({
                   onChange={(event) => patch(row.size, { stockQty: Number(event.target.value) })}
                 />
               </td>
-              <td className="px-3 py-2 text-xs font-semibold text-moss">{row.stockQty > 0 ? "пойдет в Avito" : "не выгружать"}</td>
+              <td className="px-3 py-2 text-xs font-semibold text-moss">{row.enabled && row.stockQty > 0 ? "пойдет в Avito" : "не выгружать"}</td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SizePresetBar({ field, onApply }: { field?: AvitoCatalogField; onApply: (sizes: string[]) => void }) {
+  const linkedValues = useFieldValues(field);
+  const allValues = linkedValues.length ? linkedValues : [];
+
+  return (
+    <div className="mt-4 flex flex-wrap gap-2 rounded-md border border-line bg-canvas p-3">
+      {sizePresets.map((preset) => (
+        <Button key={preset.label} tone="secondary" onClick={() => onApply(preset.sizes)}>
+          {preset.label}
+        </Button>
+      ))}
+      {allValues.length ? (
+        <Button tone="secondary" onClick={() => onApply(allValues)}>
+          Все размеры Avito
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -605,6 +637,9 @@ export function AvitoFieldControl({
   }
   if (field.type === "number") {
     return <NumberField label={label} value={Number(value || 0)} onChange={(next) => onChange(String(next))} />;
+  }
+  if (field.type === "boolean") {
+    return <SelectField label={label} value={value} options={["", "true", "false"]} onChange={onChange} />;
   }
   if (field.type === "text") {
     return (
@@ -685,15 +720,16 @@ export function SizePicker({
   );
 }
 
-function useFieldValues(field: AvitoCatalogField) {
+function useFieldValues(field?: AvitoCatalogField) {
   const [linkedValues, setLinkedValues] = useState<string[]>([]);
   useEffect(() => {
     setLinkedValues([]);
-    if (!field.valuesLinkJson) return;
+    if (!field?.valuesLinkJson) return;
     requestJson<CatalogResponse<string[]>>(`/api/avito/catalog/field-values?url=${encodeURIComponent(field.valuesLinkJson)}`)
       .then((payload) => setLinkedValues(payload.data))
       .catch(() => setLinkedValues([]));
-  }, [field.valuesLinkJson]);
+  }, [field?.valuesLinkJson]);
+  if (!field) return [];
   return field.values.length ? field.values : linkedValues;
 }
 
@@ -739,7 +775,7 @@ function SupplierSelect({
   );
 }
 
-function Intro({ title, text }: { title: string; text: string }) {
+function SectionHeading({ title, text }: { title: string; text: string }) {
   return (
     <div>
       <h2 className="text-lg font-semibold">{title}</h2>
@@ -750,10 +786,25 @@ function Intro({ title, text }: { title: string; text: string }) {
 
 function Summary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border border-line bg-canvas p-4">
+    <div className="rounded-md border border-line bg-canvas p-3">
       <p className="text-xs font-semibold uppercase text-moss">{label}</p>
-      <p className="mt-2 break-words font-semibold">{value}</p>
+      <p className="mt-1 break-words font-semibold">{value}</p>
     </div>
+  );
+}
+
+function buildPlannedVariants(groups: ColorGroupDraft[], sizeField: AvitoCatalogField | undefined, basePrice: number, title: string): PlannedVariant[] {
+  return groups.flatMap((group) =>
+    variantRowsForGroup(group, sizeField, basePrice).map((row) => ({
+      groupId: group.id,
+      color: group.avitoColorValue || group.color,
+      size: row.size,
+      price: row.price,
+      stockQty: row.stockQty,
+      enabled: row.enabled,
+      sku: makeSku(title || "ITEM", group.avitoColorValue || group.color, row.size),
+      photoCount: group.photos.length,
+    })),
   );
 }
 
@@ -764,10 +815,51 @@ function variantRowsForGroup(group: ColorGroupDraft, sizeField: AvitoCatalogFiel
     const override = group.variantOverrides[size];
     return {
       size,
+      enabled: override?.enabled ?? true,
       price: Math.max(0, Math.round(override?.price ?? defaultPrice)),
       stockQty: Math.max(0, Math.round(override?.stockQty ?? group.stockQty)),
     };
   });
+}
+
+function validateWizard(input: {
+  form: {
+    title: string;
+    brand: string;
+    basePrice: number;
+    avitoCategorySlug: string;
+    avitoFields: Record<string, string>;
+  };
+  groups: ColorGroupDraft[];
+  fields: AvitoCatalogField[];
+  sizeField?: AvitoCatalogField;
+  plannedVariants: PlannedVariant[];
+}) {
+  const { form, groups, fields, sizeField, plannedVariants } = input;
+  const errors: string[] = [];
+  const active = plannedVariants.filter((variant) => variant.enabled && variant.stockQty > 0);
+
+  if (!form.title.trim()) errors.push("Укажите название товара.");
+  if (form.basePrice <= 0) errors.push("Укажите базовую цену больше нуля.");
+  if (!form.avitoCategorySlug) errors.push("Выберите конечную категорию Avito.");
+  if (!groups.length) errors.push("Добавьте минимум один цвет.");
+  if (groups.some((group) => !String(group.color || group.avitoColorValue).trim())) errors.push("У каждого цвета должно быть название.");
+  if (sizeField && groups.some((group) => !group.sizes.length)) errors.push("Выберите размеры для каждого цвета.");
+  if (!active.length) errors.push("Включите хотя бы одно объявление с остатком больше 0.");
+  if (active.some((variant) => variant.price <= 0)) errors.push("Цена каждого активного объявления должна быть больше 0.");
+  if (groups.some((group) => group.photos.length === 0 && variantRowsForGroup(group, sizeField, form.basePrice).some((variant) => variant.enabled && variant.stockQty > 0))) {
+    errors.push("Загрузите фото для каждого цвета, который будет выгружаться.");
+  }
+
+  for (const field of fields.filter((item) => item.required)) {
+    const role = getFieldRole(field);
+    if (role === "brand" && !form.brand.trim()) errors.push(`Заполните обязательное поле: ${field.label}.`);
+    if (role !== "brand" && role !== "color" && role !== "size" && !String(form.avitoFields[field.key] ?? "").trim()) {
+      errors.push(`Заполните обязательное поле: ${field.label}.`);
+    }
+  }
+
+  return [...new Set(errors)];
 }
 
 function normalizeFormForFields<T extends { brand: string; avitoFields: Record<string, string> }>(form: T, fields: AvitoCatalogField[]): T {
@@ -776,6 +868,13 @@ function normalizeFormForFields<T extends { brand: string; avitoFields: Record<s
     ...form,
     brand: form.brand || (brandField ? form.avitoFields[brandField.key] ?? "" : ""),
   };
+}
+
+function normalizePresetSizes(sizes: string[], field?: AvitoCatalogField) {
+  if (!field?.values.length) return sizes;
+  const available = new Set(field.values.map((item) => item.toLowerCase()));
+  const matched = sizes.filter((size) => available.has(size.toLowerCase()));
+  return matched.length ? matched : sizes;
 }
 
 function flattenCategories(nodes: AvitoCategoryNode[]): AvitoCategoryNode[] {

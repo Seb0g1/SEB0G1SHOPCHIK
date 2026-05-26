@@ -22,6 +22,11 @@ describe("variants", () => {
     expect(makeSku("A", "Black", "M")).not.toBe(makeSku("A", "Black", "L"));
   });
 
+  it("builds readable Avito SKU from product, color and size", () => {
+    expect(makeSku("Nike Forza Nocta", "Black", "M")).toBe("AV-NIKEFORZANOCTA-BLACK-M");
+    expect(makeSku("Футболка Nike Forza Nocta", "Белый", "XL")).toContain("BELYY-XL");
+  });
+
   it("excludes zero-stock or suspended variants from feed", () => {
     expect(activeForFeed({ stockQty: 1, publicationStatus: "DRAFT" })).toBe(true);
     expect(activeForFeed({ stockQty: 0, publicationStatus: "DRAFT" })).toBe(false);

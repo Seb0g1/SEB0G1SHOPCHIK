@@ -80,8 +80,9 @@ export function buildAvitoFeed(products: FeedProduct[], settings: FeedSettings):
   const baseUrl = feedBaseUrl(settings.publicFeedUrl);
   const ads = products.flatMap((product) =>
     product.variants.filter(activeForFeed).map((variant) => {
-      const photos = product.photos
-        .filter((photo) => !photo.color || photo.color === variant.color)
+      const colorPhotos = product.photos.filter((photo) => photo.color === variant.color);
+      const generalPhotos = product.photos.filter((photo) => !photo.color);
+      const photos = (colorPhotos.length ? colorPhotos : generalPhotos)
         .sort((a, b) => a.sortOrder - b.sortOrder)
         .map((photo) => absolutePublicUrl(photo.publicUrl, baseUrl));
 
@@ -89,7 +90,8 @@ export function buildAvitoFeed(products: FeedProduct[], settings: FeedSettings):
         ? `      <Images>\n${photos.map((url) => `        <Image url="${escapeXml(url)}" />`).join("\n")}\n      </Images>\n`
         : "";
 
-      const title = `${product.title} (${variant.color})`;
+      const titleParts = [product.title, variant.color, variant.size === "ONE_SIZE" ? "" : displayVariantSize(variant.size)].filter(Boolean);
+      const title = titleParts.join(", ");
       const description = buildVariantDescription(product, variant);
       const dynamicFields = buildDynamicFieldXml(product, variant);
       const fallbackFields = dynamicFields.trim() ? "" : buildLegacyFieldXml(product, variant);

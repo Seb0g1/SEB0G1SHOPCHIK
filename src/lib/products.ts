@@ -189,7 +189,7 @@ export async function createBulkProduct(input: {
     description?: string;
     avitoFields?: Record<string, string>;
     sizes: string[];
-    variants?: Array<{ size: string; price: number; stockQty: number }>;
+    variants?: Array<{ size: string; price: number; stockQty: number; active?: boolean }>;
   }>;
 }) {
   const product = await prisma.productTemplate.create({
@@ -228,6 +228,7 @@ export async function createBulkProduct(input: {
           size,
           price: group.basePrice ?? product.basePrice,
           stockQty: group.defaultStockQty ?? 1,
+          active: true,
         }));
     for (const variant of variants) {
       await generateVariants(product.id, {
@@ -235,7 +236,7 @@ export async function createBulkProduct(input: {
         color,
         sizes: [variant.size],
         price: variant.price,
-        stockQty: variant.stockQty,
+        stockQty: variant.active === false ? 0 : variant.stockQty,
         variantFields: group.avitoFields ?? {},
       });
     }
@@ -270,7 +271,7 @@ export async function generateVariants(
         productId,
         color: variant.color,
         size: variant.size,
-        sku: makeSku(`${productId}:${input.title}`, variant.color, variant.size),
+        sku: await resolveUniqueSku(productId, makeSku(input.title, variant.color, variant.size)),
         price: variant.price,
         stockQty: variant.stockQty,
         avitoFieldsJson: JSON.stringify(input.variantFields ?? {}),
@@ -290,6 +291,23 @@ export async function generateVariants(
   }
 
   return getProduct(productId);
+}
+
+async function resolveUniqueSku(productId: string, baseSku: string) {
+  const existing = await prisma.productVariant.findUnique({ where: { sku: baseSku } });
+  if (!existing || existing.productId === productId) return baseSku;
+
+  const suffix = productId.replace(/[^a-z0-9]/gi, "").slice(-5).toUpperCase() || "ITEM";
+  const fallbackSku = `${baseSku}-${suffix}`;
+  const fallback = await prisma.productVariant.findUnique({ where: { sku: fallbackSku } });
+  if (!fallback || fallback.productId === productId) return fallbackSku;
+
+  for (let index = 2; index < 100; index += 1) {
+    const candidate = `${fallbackSku}-${index}`;
+    const found = await prisma.productVariant.findUnique({ where: { sku: candidate } });
+    if (!found || found.productId === productId) return candidate;
+  }
+  return `${fallbackSku}-${Date.now()}`;
 }
 
 export async function upsertColorGroups(

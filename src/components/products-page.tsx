@@ -69,7 +69,7 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
     <>
       <PageHeader
         eyebrow="Каталог"
-        title="Товары Avito"
+        title="Каталог товаров Avito"
         actions={
           <Link href="/products/new">
             <Button>
@@ -82,7 +82,7 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
       <div className="space-y-4 p-4 xl:p-6">
         <div className="grid gap-3 md:grid-cols-4">
           <Metric label="Товаров" value={items.length} />
-          <Metric label="Активных вариантов" value={activeVariants} hint={`${totalVariants} всего`} />
+          <Metric label="Активных объявлений" value={activeVariants} hint={`${totalVariants} всего`} />
           <Metric label="К синхронизации" value={needsSync} />
           <Metric label="Ошибки" value={items.filter((product) => product.status === "ERROR").length} />
         </div>
@@ -131,25 +131,38 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
 
         {filtered.length ? (
           <div className="overflow-hidden rounded-md border border-line bg-white shadow-panel">
-            <div className="grid grid-cols-[1.5fr_1fr_.6fr_.6fr_.7fr] gap-3 border-b border-line bg-canvas px-4 py-3 text-xs font-semibold uppercase text-moss max-lg:hidden">
+            <div className="grid grid-cols-[1.6fr_1.1fr_.7fr_.6fr_.7fr] gap-3 border-b border-line bg-canvas px-4 py-3 text-xs font-semibold uppercase text-moss max-lg:hidden">
               <span>Товар</span>
-              <span>Категория</span>
-              <span>Варианты</span>
+              <span>Категория и цвета</span>
+              <span>Объявления</span>
               <span>Остаток</span>
               <span>Статус</span>
             </div>
             <div className="divide-y divide-line">
               {filtered.map((product) => (
-                <Link key={product.id} className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.5fr_1fr_.6fr_.6fr_.7fr] lg:items-center" href={`/products/${product.id}`}>
+                <Link key={product.id} className="grid gap-3 px-4 py-4 transition hover:bg-canvas lg:grid-cols-[1.6fr_1.1fr_.7fr_.6fr_.7fr] lg:items-center" href={`/products/${product.id}`}>
                   <div className="flex min-w-0 items-center gap-3">
                     <ProductThumb product={product} />
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{product.title}</p>
-                      <p className="mt-1 text-sm text-moss">{product.brand || "Без бренда"} · {formatMoney(product.basePrice)} ₽</p>
+                      <p className="mt-1 text-sm text-moss">
+                        {product.brand || "Без бренда"} · от {formatMoney(minVariantPrice(product) || product.basePrice)} ₽ · {product.photos.length} фото
+                      </p>
                     </div>
                   </div>
-                  <p className="text-sm text-moss">{product.avitoCategoryName || product.productType || "Категория не выбрана"}</p>
-                  <p className="text-sm font-semibold">{product.variants.length}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-moss">{product.avitoCategoryName || product.productType || "Категория не выбрана"}</p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {productColors(product).slice(0, 5).map((color) => (
+                        <span key={color} className="rounded bg-canvas px-2 py-1 text-xs font-semibold text-ink">
+                          {color}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold">
+                    {product.variants.filter((variant) => variant.stockQty > 0).length}/{product.variants.length}
+                  </p>
                   <p className="text-sm font-semibold">{product.variants.reduce((sum, variant) => sum + variant.stockQty, 0)}</p>
                   <StatusPill status={product.status} />
                 </Link>
@@ -172,6 +185,15 @@ export function ProductsPage({ products }: { products: ClientProduct[] }) {
       </div>
     </>
   );
+}
+
+function productColors(product: ClientProduct) {
+  return [...new Set(product.variants.map((variant) => variant.color).filter(Boolean))];
+}
+
+function minVariantPrice(product: ClientProduct) {
+  const prices = product.variants.filter((variant) => variant.stockQty > 0).map((variant) => variant.price);
+  return prices.length ? Math.min(...prices) : 0;
 }
 
 function Metric({ label, value, hint }: { label: string; value: number; hint?: string }) {

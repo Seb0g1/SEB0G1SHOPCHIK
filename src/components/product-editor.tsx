@@ -144,11 +144,15 @@ export function ProductEditor({ initialProduct }: { initialProduct: ClientProduc
 
   async function submit() {
     await withBusy("submit", async () => {
-      const payload = await requestJson<{ errors: string[]; warnings: string[] }>(`/api/publications/${product.id}/submit`, { method: "POST" });
+      const payload = await requestJson<{ errors: string[]; warnings: string[]; manualSetupRequired?: boolean; feedUrl?: string }>(`/api/publications/${product.id}/submit`, { method: "POST" });
       const refreshed = await requestJson<{ product: ClientProduct }>(`/api/products/${product.id}`);
       setProduct(refreshed.product);
       setTab("publication");
-      setMessage(payload.errors[0] || payload.warnings[0] || "Запрос отправлен в Avito.");
+      setMessage(
+        payload.errors[0] ||
+          (payload.manualSetupRequired ? `Autoload API недоступен. Вставьте feed URL вручную в кабинете Avito: ${payload.feedUrl}` : payload.warnings[0]) ||
+          "Запрос отправлен в Avito.",
+      );
     });
   }
 

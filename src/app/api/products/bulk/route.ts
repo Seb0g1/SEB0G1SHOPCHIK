@@ -17,6 +17,7 @@ const colorGroupSchema = z.object({
         size: z.string().min(1),
         price: z.coerce.number().int().min(0),
         stockQty: z.coerce.number().int().min(0),
+        active: z.boolean().optional(),
       }),
     )
     .optional(),

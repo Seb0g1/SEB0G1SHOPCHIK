@@ -18,7 +18,7 @@ const product = {
       id: "variant-1",
       color: "Белый",
       size: "M",
-      sku: "AV-1-M",
+      sku: "AV-1-WHITE-M",
       price: 4990,
       stockQty: 2,
       publicationStatus: "DRAFT",
@@ -27,13 +27,26 @@ const product = {
       id: "variant-2",
       color: "Белый",
       size: "L",
-      sku: "AV-1-L",
+      sku: "AV-1-WHITE-L",
       price: 4990,
       stockQty: 0,
       publicationStatus: "DRAFT",
     },
+    {
+      id: "variant-3",
+      color: "Черный",
+      size: "M",
+      sku: "AV-1-BLACK-M",
+      price: 5490,
+      stockQty: 1,
+      publicationStatus: "DRAFT",
+    },
   ],
-  photos: [{ color: "Белый", publicUrl: "/api/uploads/product-1/a.jpg", sortOrder: 0 }],
+  photos: [
+    { color: "Белый", publicUrl: "/api/uploads/product-1/white.jpg", sortOrder: 0 },
+    { color: "Черный", publicUrl: "/api/uploads/product-1/black.jpg", sortOrder: 0 },
+    { color: null, publicUrl: "/api/uploads/product-1/common.jpg", sortOrder: 0 },
+  ],
 };
 
 describe("xml", () => {
@@ -42,15 +55,20 @@ describe("xml", () => {
     expect(cdata("a]]>b")).toBe("<![CDATA[a]]]]><![CDATA[>b]]>");
   });
 
-  it("builds feed with active variants and public image urls", () => {
+  it("builds one Avito ad per active variant with color photos", () => {
     const xml = buildAvitoFeed([product], {
       address: "Москва",
       publicFeedUrl: "http://localhost:4317/api/avito/feed.xml",
     });
 
     expect(xml).toContain('<Ads formatVersion="3" target="Avito.ru">');
-    expect(xml).toContain("<Id>AV-1-M</Id>");
-    expect(xml).not.toContain("<Id>AV-1-L</Id>");
-    expect(xml).toContain('url="http://localhost:4317/api/uploads/product-1/a.jpg"');
+    expect(xml).toContain("<Id>AV-1-WHITE-M</Id>");
+    expect(xml).toContain("<Id>AV-1-BLACK-M</Id>");
+    expect(xml).not.toContain("<Id>AV-1-WHITE-L</Id>");
+    expect(xml).toContain("<Title>Футболка Nike Forza Nocta, Белый, M</Title>");
+    expect(xml).toContain("<Title>Футболка Nike Forza Nocta, Черный, M</Title>");
+    expect(xml).toContain('url="http://localhost:4317/api/uploads/product-1/white.jpg"');
+    expect(xml).toContain('url="http://localhost:4317/api/uploads/product-1/black.jpg"');
+    expect(xml).not.toContain('url="http://localhost:4317/api/uploads/product-1/common.jpg"');
   });
 });
