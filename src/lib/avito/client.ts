@@ -83,11 +83,11 @@ export class AvitoClient {
     return payload.access_token;
   }
 
-  async exchangeAuthorizationCode(code: string, redirectUrl: string): Promise<TokenResponse> {
+  async exchangeAuthorizationCode(code: string, redirectUrl?: string): Promise<TokenResponse> {
     return this.requestOAuthToken({
       grant_type: "authorization_code",
       code,
-      redirect_uri: redirectUrl,
+      ...(redirectUrl ? { redirect_uri: redirectUrl } : {}),
     });
   }
 

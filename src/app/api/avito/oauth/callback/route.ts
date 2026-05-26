@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
   try {
     const client = new AvitoClient({ clientId: settings.clientId, clientSecret: settings.clientSecret });
-    const tokens = await client.exchangeAuthorizationCode(code, settings.redirectUrl);
+    const tokens = await client.exchangeAuthorizationCode(code);
     await saveAvitoOAuthTokens({
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,

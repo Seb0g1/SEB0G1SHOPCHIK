@@ -68,7 +68,7 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
       setMessage("Сначала сохраните Client ID.");
       return;
     }
-    window.location.href = buildOAuthUrl(settings.clientId, settings.redirectUrl, ["user:read", "autoload:reports"]);
+    window.location.href = buildOAuthUrl(settings.clientId, ["user:read", "autoload:reports"]);
   }
 
   return (
@@ -142,7 +142,7 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
             </div>
             <p className="mt-4 break-all rounded-md bg-canvas p-3 text-sm font-semibold">{settings.redirectUrl}</p>
             <p className="mt-3 text-sm leading-6 text-moss">Для вашего приложения Avito используется корень домена. Если Avito вернет code на главную страницу, SEB0G1SHOPCHIK сам обработает его.</p>
-            <p className="mt-2 text-sm leading-6 text-moss">Кнопка подключения запрашивает минимальные доступы user:read и autoload:reports, чтобы Avito не падал на расширенном наборе scope.</p>
+            <p className="mt-2 text-sm leading-6 text-moss">Кнопка подключения отправляет OAuth без явного redirect_uri: Avito берет redirect из кабинета приложения, а явная передача этого параметра может давать экран “Что-то пошло не так”.</p>
           </div>
           <div className="rounded-md border border-line bg-white p-5 shadow-panel">
             <h2 className="font-semibold">Состояние сохранения</h2>
@@ -177,16 +177,15 @@ export function SettingsPage({ initialSettings }: { initialSettings: ClientAvito
   );
 }
 
-function buildOAuthUrl(clientId: string, redirectUrl: string, scopes: string[]) {
+function buildOAuthUrl(clientId: string, scopes: string[]) {
   const query = [
     ["response_type", "code"],
     ["client_id", clientId],
-    ["redirect_uri", redirectUrl],
     ["scope", scopes.join(" ")],
   ]
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value).replace(/%20/g, "%20")}`)
     .join("&");
-  return `https://avito.ru/oauth?${query}`;
+  return `https://www.avito.ru/oauth?${query}`;
 }
 
 function SettingsStatusLine({ label, value }: { label: string; value: string }) {

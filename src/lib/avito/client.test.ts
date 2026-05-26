@@ -43,6 +43,30 @@ describe("AvitoClient", () => {
     await expect(client.request("/bad")).rejects.toBeInstanceOf(AvitoApiError);
   });
 
+  it("exchanges OAuth code without redirect_uri by default", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ access_token: "oauth-token", expires_in: 3600 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new AvitoClient({ clientId: "id", clientSecret: "secret", baseUrl: "https://api.test" });
+    await client.exchangeAuthorizationCode("code-1");
+
+    const body = (fetchMock.mock.calls[0]?.[1] as RequestInit).body as URLSearchParams;
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("code")).toBe("code-1");
+    expect(body.has("redirect_uri")).toBe(false);
+  });
+
+  it("can include redirect_uri for OAuth code exchange when explicitly requested", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ access_token: "oauth-token", expires_in: 3600 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new AvitoClient({ clientId: "id", clientSecret: "secret", baseUrl: "https://api.test" });
+    await client.exchangeAuthorizationCode("code-1", "https://amsterdam2.sebog1.ru/");
+
+    const body = (fetchMock.mock.calls[0]?.[1] as RequestInit).body as URLSearchParams;
+    expect(body.get("redirect_uri")).toBe("https://amsterdam2.sebog1.ru/");
+  });
+
   it("uses env-configured review reply endpoint", async () => {
     vi.stubEnv("AVITO_REVIEW_REPLY_PATH", "/custom/reviews/{reviewId}/reply");
     const fetchMock = vi
